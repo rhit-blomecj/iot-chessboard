@@ -26,14 +26,22 @@ void setup() {
 
   runOAuthServer();
 
-  serializeJson(makeBoardMove(token, "I2Bs80oaf1aB", "e1d1"), Serial);
-  serializeJson(streamBoardState(token, "I2Bs80oaf1aB", gameStream), Serial);
+  
+  serializeJson(streamBoardState(token, "1gf7S4jn", gameStream), Serial);
 
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
 
+  if(Serial.available()){
+    String move = Serial.readString();
+    Serial.println("Value Read From Serial" + move);
+    Serial.print("Sending Move: ");
+    serializeJson(makeBoardMove(token, "1gf7S4jn", move), Serial);
+    Serial.println();
+  }
+
+  // put your main code here, to run repeatedly:
   if(gameStream.connected()){
     while(gameStream.available()){
       // Serial.println("gameStream in .ino file available.");
@@ -50,6 +58,7 @@ void loop() {
 
       JsonDocument nextStreamedEvent;
       deserializeJson(nextStreamedEvent, line);
+      Serial.print("Recieved Move: ");
       serializeJson(nextStreamedEvent, Serial);
       Serial.println();
     }
