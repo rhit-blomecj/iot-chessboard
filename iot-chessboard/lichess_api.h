@@ -353,6 +353,7 @@ extern void runOAuthServer() {
     delay(2);  //allow the cpu to switch to other tasks
   }
 
+  server.stop();
 }
 
 
