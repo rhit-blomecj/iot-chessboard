@@ -3,8 +3,7 @@
 #include "arduino_secrets.h"
 #include <Preferences.h>
 #include "lichess_api.h"
-#include "bluetooth_serial_wifi_setup.h"
-// #include "wifi_setup.h"
+#include "bluetooth_wifi_setup.h"
 
 WiFiClientSecure gameStream;
 
@@ -13,29 +12,26 @@ void setup() {
   Serial.println(ESP.getFreeHeap());
 
   runBluetoothNetworkSetup();
-  // connectWifi("RHIT-OPEN", "");
 
   runOAuthServer();
 
   
-  serializeJson(streamBoardState(token, "1gf7S4jn", gameStream), Serial);
+  serializeJson(streamBoardState(token, "wVJpJMuD", gameStream), Serial);
 
 }
 
 void loop() {
 
+  //if we have a move to send send it
   if(Serial.available()){
     String move = Serial.readString();
-    Serial.println("Value Read From Serial" + move);
-    Serial.print("Sending Move: ");
-    serializeJson(makeBoardMove(token, "1gf7S4jn", move), Serial);
-    Serial.println();
+    Serial.println("Sending Move: ");
+    makeBoardMove(token, "wVJpJMuD", move);
   }
 
-  // put your main code here, to run repeatedly:
+  //if there is a move to recieve recieve it
   if(gameStream.connected()){
     while(gameStream.available()){
-      // Serial.println("gameStream in .ino file available.");
       String line;
       line = gameStream.readStringUntil('\n');
       line.trim();
