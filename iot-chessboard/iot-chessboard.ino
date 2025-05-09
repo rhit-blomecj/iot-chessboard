@@ -3,26 +3,17 @@
 #include "arduino_secrets.h"
 #include <Preferences.h>
 #include "lichess_api.h"
+#include "bluetooth_serial_wifi_setup.h"
+// #include "wifi_setup.h"
 
 WiFiClientSecure gameStream;
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(SECRET_SSID, SECRET_PASS);
-  Serial.println("");
+  Serial.println(ESP.getFreeHeap());
 
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(SECRET_SSID);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  runBluetoothNetworkSetup();
+  // connectWifi("RHIT-OPEN", "");
 
   runOAuthServer();
 
