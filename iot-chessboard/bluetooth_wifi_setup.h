@@ -19,31 +19,33 @@ class MyCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     String value = pCharacteristic->getValue();
 
-    Serial.println("*********");
-    Serial.print("New value: ");
+    //print recieved value
+    Serial.print("Value Recieved Over Bluetooth: ");
     for (int i = 0; i < value.length(); i++) {
       Serial.print(value[i]);
     }
     Serial.println();
-    Serial.println("*********");
 
+    //separate into parts for wifi setup
     int index = value.indexOf(':');
-    String ssid = value.substring(0, index);
-    String password = value.substring(index+1);
+    //ensure colon is found if not continue to wait for network credentials
+    if(index != -1){
+      String ssid = value.substring(0, index);
+      String password = value.substring(index+1);
+      
+      Serial.println("SSID: " + ssid);
+      Serial.println("Password: " + password);
 
+      //should return true if successful (I haven't setup timeout so invalid data will just stall here)
+      isWifiConnected = connectWifi(ssid, password);
+    }
     
-    
-    Serial.println("SSID: " + ssid);
-    Serial.println("Password: " + password);
-
-
-    isWifiConnected = connectWifi(ssid, password);
-    
+    //after connected to wifi stop BLE communication if connection unsuccessful send message to indicate that over bluetooth and wait for data again
     if(isWifiConnected){
       BLEDevice::getAdvertising()->stop();
       BLEDevice::deinit(true); // 'true' clears the BLE device resources
     } else {
-      pCharacteristic->setValue("Invalid Network Information\nSend Your Wifi Network Information in the following format <network_name>:<network_password>");
+      pCharacteristic->setValue("Connection Unsuccessful\nSend Your Wifi Network Information in the following format <network_name>:<network_password>");
     }
   }
 };
