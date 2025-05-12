@@ -1,11 +1,12 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
-// #include <Preferences.h>
 
 #include "arduino_secrets.h"
 #include "lichess_api.h"
 #include "bluetooth_wifi_setup.h"
 #include "oled_functions.h"
+#include "wifi_setup.h"
+#include "global_preferences.h"
 
 // const String ranks[8] = {"1", "2", "3", "4", "5", "6", "7", "8"};
 // const String files[8] = {"a", "b", "c", "d", "e", "f", "g", "h"}; 
@@ -28,20 +29,35 @@ char start_rank = '0'+start_index;
 
 WiFiClientSecure gameStream;
 
+String lichessToken;
 
 void setup() {
   Serial.begin(115200);
-
-  Serial.println(ESP.getFreeHeap());
+  setupGlobalPreferences();
 
   setupOLED();
 
-  runBluetoothNetworkSetup();
-
-  runOAuthServer();
+  // if stored wifi credentials don't work then run Bluetooth network setup
+  String network_ssid = prefs.getString("network_ssid", "");
+  String network_pw = prefs.getString("network_pw", "");
 
   
-  serializeJson(streamBoardState(token, "wVJpJMuD", gameStream), Serial);
+  if(!connectWifi(network_ssid, network_pw)){
+    runBluetoothNetworkSetup();
+  }
+
+  // if stored lichess credentials don't work then run OAuth setup
+  lichessToken = prefs.getString("lichess_token", "");
+  String testedTokenResponse = testAccessToken(lichessToken)[lichessToken].as<String>();//if this is null then it is invalid idk what it looks like when expired but hopefully the same
+  if(testedTokenResponse == "null"){
+    runOAuthServer();
+  }
+
+  //runOAuthServer should have written to prefs so this will now have the correct data
+  lichessToken = prefs.getString("lichess_token");
+
+  
+  serializeJson(streamBoardState(lichessToken, "p3qqmsZ9", gameStream), Serial);
 
 }
 
@@ -51,7 +67,7 @@ void loop() {
   if(Serial.available()){
     String move = Serial.readString();
     Serial.println("Sending Move: ");
-    makeBoardMove(token, "wVJpJMuD", move);
+    makeBoardMove(lichessToken, "p3qqmsZ9", move);
   }
 
   //if there is a move to recieve recieve it

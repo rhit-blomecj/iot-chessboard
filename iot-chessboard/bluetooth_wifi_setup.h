@@ -12,13 +12,16 @@
   #include "wifi_setup.h"
 
   #include "oled_functions.h"
+  #include "global_preferences.h"
 
   // See the following for generating UUIDs:
   // https://www.uuidgenerator.net/
-  #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-  #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+  #define SERVICE_UUID        "d9a2ce94-f87b-4bac-9f17-7fa79d88e5c6"
+  #define CHARACTERISTIC_UUID "3cb62c6b-f175-448c-ace6-7b6d30849d9b"
 
   bool isWifiConnected = false;
+  String ssid = "";
+  String password = "";
 
   class MyCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -35,8 +38,8 @@
       int index = value.indexOf(':');
       //ensure colon is found if not continue to wait for network credentials
       if(index != -1){
-        String ssid = value.substring(0, index);
-        String password = value.substring(index+1);
+        ssid = value.substring(0, index);
+        password = value.substring(index+1);
         
         Serial.println("SSID: " + ssid);
         Serial.println("Password: " + password);
@@ -75,12 +78,17 @@
       displayString(0, 0, "Connect to BLE Device:");
       displayString(0, 10, "IoT_ChessBoard");
       displayString(0, 20, "Send Your Wifi Network Info");
-      // displayString(0, 30, "in Format:");
-      // displayString(0, 40, "<newtork_name>:<network_password>");
+      displayString(0, 30, "in Format:");
+      displayString(0, 40, "<newtork_name>:<network_password>");
 
       while(!isWifiConnected){//loop until we are connected
         delay(2);
       }
+
+      prefs.putString("network_ssid", ssid);
+      prefs.putString("network_pw", password);
+      Serial.println("After prefs.putting ssid is: " + prefs.getString("network_ssid"));
+      Serial.println("After prefs.putting password is: " + prefs.getString("network_password"));
 
       display.clear();
       VextOFF();

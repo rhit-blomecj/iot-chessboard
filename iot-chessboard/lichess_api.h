@@ -11,7 +11,7 @@
   #include <SHA256.h>
 
   #include "oled_functions.h"
-  // #include <Preferences.h>
+  #include "global_preferences.h"
 
   const char* lichess_root_ca = R"EOF(
   -----BEGIN CERTIFICATE-----
@@ -313,6 +313,8 @@
 
     token = response["access_token"].as<String>();
 
+    prefs.putString("lichess_token", token);
+    Serial.println("After prefs.putting token is: " + prefs.getString("lichess_token"));
     server.send(200);
     authenticated = true;
   }
