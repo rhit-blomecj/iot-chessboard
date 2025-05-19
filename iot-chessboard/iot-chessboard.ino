@@ -8,24 +8,36 @@
 #include "wifi_setup.h"
 #include "global_preferences.h"
 
-// const String ranks[8] = {"1", "2", "3", "4", "5", "6", "7", "8"};
-// const String files[8] = {"a", "b", "c", "d", "e", "f", "g", "h"}; 
-//or
-// const String board [8] [8] = {
-//     {"a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"},
-//     {"a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2"},
-//     {"a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3"},
-//     {"a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4"},
-//     {"a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5"},
-//     {"a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6"},
-//     {"a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7"},
-//     {"a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"}
-//   };
-//or
-/*
-char start_file = 'a'+start_index;
-char start_rank = '0'+start_index;
-*/
+
+String translateIndexesToFileAndRank(int file_index, int rank_index){
+  //promotion will not break this because the API auto promotes to Queen
+  char file = 'a' + file_index;
+  char rank = '1' + rank_index;
+
+  char c_strng_tile [3] = "12";
+
+  c_strng_tile [0] = file;
+  c_strng_tile [1] = rank;
+
+  String tile = String(c_strng_tile);
+
+  Serial.println(tile);
+  return tile;
+}
+
+String translateFileAndRankToIndexes(String tile){
+  //promotion will currently break this
+  char c_str_tile [3] = tile.c_str();
+
+  int file_index = (int) (c_str_tile[0] - 'a');
+  int rank_index = (int) (c_str_tile[1] - '1');
+
+  String tile = String(c_strng_tile);
+
+  Serial.println(tile);
+  return tile;
+}
+
 
 WiFiClientSecure gameStream;
 
@@ -38,8 +50,8 @@ void setup() {
   setupOLED();
 
   // if stored wifi credentials don't work then run Bluetooth network setup
-  String network_ssid = prefs.getString("network_ssid", "");
-  String network_pw = prefs.getString("network_pw", "");
+  String network_ssid = prefs.getString("network_ssid");
+  String network_pw = prefs.getString("network_pw");
 
   
   if(!connectWifi(network_ssid, network_pw)){
@@ -93,7 +105,7 @@ void loop() {
   }
 
   delay(200);
-  
+
 }
 
 

@@ -18,7 +18,7 @@
 
       if(millis() >= timeout){
         Serial.println("");
-        Serial.print("Faile to Connect to ");
+        Serial.print("Failed to Connect to ");
         Serial.println(ssid);
         return false;
       }

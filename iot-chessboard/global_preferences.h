@@ -9,5 +9,4 @@
     prefs.begin("IoTChessboard", false);
   }
 
-
 #endif
