@@ -8,7 +8,7 @@
       WiFi.begin(ssid, password);
       Serial.println("");
 
-      int timeout = millis() + 10000;//set timeout time to 10 seconds in the future
+      int timeout = millis() + 15000;//set timeout time to 15 seconds in the future
 
       // Wait for connection
       while (WiFi.status() != WL_CONNECTED && millis() < timeout) {

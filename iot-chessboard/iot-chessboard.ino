@@ -8,11 +8,20 @@
 #include "wifi_setup.h"
 #include "global_preferences.h"
 
+struct IndexPair { 
+  int file_index;
+  int rank_index;
+};
 
-String translateIndexesToFileAndRank(int file_index, int rank_index){
+struct Move {
+  String start_tile;
+  String end_tile;
+};
+
+String translateIndexesToFileAndRank(IndexPair pair){
   //promotion will not break this because the API auto promotes to Queen
-  char file = 'a' + file_index;
-  char rank = '1' + rank_index;
+  char file = 'a' + pair.file_index;
+  char rank = '1' + pair.rank_index;
 
   char c_strng_tile [3] = "12";
 
@@ -25,17 +34,16 @@ String translateIndexesToFileAndRank(int file_index, int rank_index){
   return tile;
 }
 
-String translateFileAndRankToIndexes(String tile){
+IndexPair translateFileAndRankToIndexes(String tile){
   //promotion will currently break this
-  char c_str_tile [3] = tile.c_str();
+  const char * c_str_tile = tile.c_str();//should only be size 3 because it should be something like "a1"
 
-  int file_index = (int) (c_str_tile[0] - 'a');
-  int rank_index = (int) (c_str_tile[1] - '1');
+  IndexPair pair;
 
-  String tile = String(c_strng_tile);
-
-  Serial.println(tile);
-  return tile;
+  pair.file_index = (int) (c_str_tile[0] - 'a');
+  pair.rank_index = (int) (c_str_tile[1] - '1');
+  
+  return pair;
 }
 
 
@@ -52,7 +60,6 @@ void setup() {
   // if stored wifi credentials don't work then run Bluetooth network setup
   String network_ssid = prefs.getString("network_ssid");
   String network_pw = prefs.getString("network_pw");
-
   
   if(!connectWifi(network_ssid, network_pw)){
     runBluetoothNetworkSetup();
@@ -69,7 +76,7 @@ void setup() {
   lichessToken = prefs.getString("lichess_token");
 
   
-  serializeJson(streamBoardState(lichessToken, "p3qqmsZ9", gameStream), Serial);
+  serializeJson(streamBoardState(lichessToken, "T5Gn5OKT", gameStream), Serial);
 
 }
 
@@ -79,7 +86,7 @@ void loop() {
   if(Serial.available()){
     String move = Serial.readString();
     Serial.println("Sending Move: ");
-    makeBoardMove(lichessToken, "p3qqmsZ9", move);
+    makeBoardMove(lichessToken, "T5Gn5OKT", move);
   }
 
   //if there is a move to recieve recieve it
@@ -92,19 +99,19 @@ void loop() {
       if (line.length() == 0 || line == "1" || !line.startsWith("{")) {
         line = gameStream.readString();
         line.trim();
-        Serial.println("Ignoring non-JSON line: " + line);
+        // Serial.println("Ignoring non-JSON line: " + line);
         continue;
       }
 
       JsonDocument nextStreamedEvent;
       deserializeJson(nextStreamedEvent, line);
-      Serial.print("Recieved Move: ");
+      Serial.print("Recieved Event: ");
       serializeJson(nextStreamedEvent, Serial);
       Serial.println();
     }
   }
 
-  delay(200);
+  delay(2);
 
 }
 
