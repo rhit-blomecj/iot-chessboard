@@ -45,6 +45,15 @@ IndexPair translateFileAndRankToIndexes(String tile){
   return pair;
 }
 
+int translateIndexesToNeoPixel(IndexPair pair){
+  const int FILE_WIDTH = 8;
+  if(pair.rank_index%2 == 0){
+    return (pair.rank_index * FILE_WIDTH + pair.file_index);
+  } else{
+    return (pair.rank_index * FILE_WIDTH + (FILE_WIDTH - pair.file_index));
+  }
+}
+
 
 WiFiClientSecure gameStream;
 
@@ -109,6 +118,7 @@ void loop() {
         IndexPair endIndexes = translateFileAndRankToIndexes(move.substring(2,4));
         Serial.printf("start_file_index: %d\nstart_rank_index: %d\nend_file_index: %d\nend_rank_index: %d\n", startIndexes.file_index, startIndexes.rank_index, endIndexes.file_index, endIndexes.rank_index);
         Serial.println("Translated back into UCI: " + translateIndexesToFileAndRank(startIndexes) + translateIndexesToFileAndRank(endIndexes));
+        Serial.printf("Translated to NeoPixel Start: %d\nTranslated to NeoPixel End: %d\n", translateIndexesToNeoPixel(startIndexes), translateIndexesToNeoPixel(endIndexes));
          
 
         Serial.print("Recieved Event: ");
