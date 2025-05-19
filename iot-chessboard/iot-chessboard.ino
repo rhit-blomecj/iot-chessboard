@@ -19,7 +19,7 @@ struct Move {
 };
 
 String translateIndexesToFileAndRank(IndexPair pair){
-  //promotion will not break this because the API auto promotes to Queen
+  //auto promotes to Queen
   char file = 'a' + pair.file_index;
   char rank = '1' + pair.rank_index;
 
@@ -30,12 +30,11 @@ String translateIndexesToFileAndRank(IndexPair pair){
 
   String tile = String(c_strng_tile);
 
-  Serial.println(tile);
   return tile;
 }
 
 IndexPair translateFileAndRankToIndexes(String tile){
-  //promotion will currently break this
+  //promotion will currently break this make sure before handing tile to this it pulls off the promotion char
   const char * c_str_tile = tile.c_str();//should only be size 3 because it should be something like "a1"
 
   IndexPair pair;
@@ -76,7 +75,7 @@ void setup() {
   lichessToken = prefs.getString("lichess_token");
 
   
-  serializeJson(streamBoardState(lichessToken, "T5Gn5OKT", gameStream), Serial);
+  serializeJson(streamBoardState(lichessToken, "96UxhMfikxD3", gameStream), Serial);
 
 }
 
@@ -86,7 +85,7 @@ void loop() {
   if(Serial.available()){
     String move = Serial.readString();
     Serial.println("Sending Move: ");
-    makeBoardMove(lichessToken, "T5Gn5OKT", move);
+    makeBoardMove(lichessToken, "96UxhMfikxD3", move);
   }
 
   //if there is a move to recieve recieve it
@@ -96,18 +95,32 @@ void loop() {
       line = gameStream.readStringUntil('\n');
       line.trim();
 
-      if (line.length() == 0 || line == "1" || !line.startsWith("{")) {
-        line = gameStream.readString();
-        line.trim();
+      
+      if (line.startsWith("{")) {
+        JsonDocument nextStreamedEvent;
+        deserializeJson(nextStreamedEvent, line);
+
+
+        String moves_list = nextStreamedEvent["moves"].as<String>();
+        int index_of_last_space = moves_list.lastIndexOf(' ') + 1;//if this returns -1 I get 0 so it is start of string
+        Serial.println("Move: " + moves_list.substring(index_of_last_space));
+        String move = moves_list.substring(index_of_last_space);
+        IndexPair startIndexes = translateFileAndRankToIndexes(move.substring(0,2));
+        IndexPair endIndexes = translateFileAndRankToIndexes(move.substring(2,4));
+        Serial.printf("start_file_index: %d\nstart_rank_index: %d\nend_file_index: %d\nend_rank_index: %d\n", startIndexes.file_index, startIndexes.rank_index, endIndexes.file_index, endIndexes.rank_index);
+        Serial.println("Translated back into UCI: " + translateIndexesToFileAndRank(startIndexes) + translateIndexesToFileAndRank(endIndexes));
+         
+
+        Serial.print("Recieved Event: ");
+        serializeJson(nextStreamedEvent, Serial);
+        Serial.println();
+      }else{
+        // line.trim();
         // Serial.println("Ignoring non-JSON line: " + line);
         continue;
       }
 
-      JsonDocument nextStreamedEvent;
-      deserializeJson(nextStreamedEvent, line);
-      Serial.print("Recieved Event: ");
-      serializeJson(nextStreamedEvent, Serial);
-      Serial.println();
+      
     }
   }
 
