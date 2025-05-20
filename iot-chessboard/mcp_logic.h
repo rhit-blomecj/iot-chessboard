@@ -135,8 +135,8 @@ void setupMCP() {
   Serial.println("Setup complete. Waiting for interrupts...");
 }
 
-void loop() {
-  if (mcp_interrupt_flag) {}
+String getMoveFromHardware() {
+  if (mcp_interrupt_flag) {
 
     Serial.println("----------------------------------");
     Serial.println("ESP32 Interrupt Triggered!");
@@ -147,17 +147,8 @@ void loop() {
       
       if (intFlags != 0) {
         interrupt_found_on_mcp = true;
-        Serial.print("MCP "); Serial.print(i);
-        Serial.print(" (Addr 0x"); Serial.print(mcp_addresses[i], HEX);
-        Serial.print(") - Interrupt Flags: 0b"); 
-        for (int k = 15; k >= 0; k--) Serial.print((intFlags >> k) & 1);
-        Serial.println();
 
         uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
-        
-        Serial.print("Captured GPIO Values: 0b");
-        for (int k = 15; k >= 0; k--) Serial.print((capturedValues >> k) & 1);
-        Serial.println();
 
         for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
           if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
@@ -166,14 +157,14 @@ void loop() {
             String chess_pos = getChessPosition(i, pin_idx_on_mcp);
             bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
 
-            Serial.print("      Pin ");
-            if (pin_idx_on_mcp < 8) { 
-              Serial.print("GPA: "); 
-              Serial.println(pin_idx_on_mcp); 
-            } else { 
-              Serial.print("GPB: "); 
-              Serial.println(pin_idx_on_mcp - 8);
-            }
+            // Serial.print("      Pin ");
+            // if (pin_idx_on_mcp < 8) { 
+            //   Serial.print("GPA: "); 
+            //   Serial.println(pin_idx_on_mcp); 
+            // } else { 
+            //   Serial.print("GPB: "); 
+            //   Serial.println(pin_idx_on_mcp - 8);
+            // }
             
             Serial.print(chess_pos); 
             Serial.print(" changed to: ");
@@ -197,7 +188,6 @@ void loop() {
     mcp_interrupt_flag = false;
     Serial.println("----------------------------------");
   }
-  delay(10); // Small delay
 }
 
 String getChessPosition(int mcp_idx, int pin_on_mcp) {
