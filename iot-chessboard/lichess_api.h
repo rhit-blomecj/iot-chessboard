@@ -253,6 +253,50 @@
     return response;
   }
 
+ /*This endpoint's body is application/x-www-form-urlencoded*/
+  extern JsonDocument challengeTheAI(String authToken, String body) {//hard coding this to be against a level 1 ai
+    Serial.println("\nStarting connection to server...");
+    apiClient.setInsecure();//should use certificate but I just wanna see if this will work
+    // apiClient.setCACert(lichess_root_ca);
+
+    // Connect to Lichess server and send API request
+    apiClient.connect(apiBaseUrl, 443);
+    if (apiClient.connected()) {
+      Serial.println("connected to server");
+
+      // Make a HTTP request:
+      apiClient.println("POST /api/challenge/ai HTTP/1.1");   // POST request
+      
+      apiClient.println(String("Host: ") + apiBaseUrl);
+      apiClient.println("Connection: close");
+      apiClient.println("Authorization: Bearer " + authToken);
+      apiClient.println("Content-Type: application/x-www-form-urlencoded");
+      apiClient.println(String("Content-Length: ") + body.length());
+      apiClient.println();
+      
+      apiClient.println(body);
+    } else {
+      Serial.println("unable to connect");
+    }
+
+    delay(1000);
+
+    //  Parse returned JSON and store values in global variables
+    JsonDocument response;
+    String line = "";
+    if (apiClient.connected()) {
+      apiClient.readStringUntil('{');
+      line = apiClient.readStringUntil('\n');
+      line = "{" + line;
+
+      Serial.println(line);
+
+      deserializeJson(response, line);
+    }
+
+    return response;
+  }
+
   /*This endpoint doesn't have a body*/
   extern JsonDocument streamBoardState(String authToken, String gameId, WiFiClientSecure &gameStreamClient) {
     Serial.println("\nStarting connection to server...");
@@ -303,7 +347,7 @@
     code = server.arg(String("code"));
     recievedState = server.arg(String("state"));
 
-    String body = "grant_type=authorization_code"
+    String body = String("grant_type=authorization_code") + 
             "&code=" + code +
             "&code_verifier=" + code_verifier +
             "&redirect_uri=http%3A%2F%2F" + WiFi.localIP().toString() + "%2Fcallback" +
@@ -314,7 +358,6 @@
     token = response["access_token"].as<String>();
 
     prefs.putString("lichess_token", token);
-    Serial.println("After prefs.putting token is: " + prefs.getString("lichess_token"));
     server.send(200);
     authenticated = true;
   }
