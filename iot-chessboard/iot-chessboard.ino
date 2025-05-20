@@ -1,3 +1,37 @@
+#include <AES.h>
+#include <AuthenticatedCipher.h>
+#include <BLAKE2b.h>
+#include <BLAKE2s.h>
+#include <BigNumberUtil.h>
+#include <BlockCipher.h>
+#include <CTR.h>
+#include <ChaCha.h>
+#include <ChaChaPoly.h>
+#include <Cipher.h>
+#include <Crypto.h>
+#include <Curve25519.h>
+#include <EAX.h>
+#include <Ed25519.h>
+#include <GCM.h>
+#include <GF128.h>
+#include <GHASH.h>
+#include <HKDF.h>
+#include <Hash.h>
+#include <KeccakCore.h>
+#include <NoiseSource.h>
+#include <OMAC.h>
+#include <P521.h>
+#include <Poly1305.h>
+#include <RNG.h>
+#include <SHA224.h>
+#include <SHA256.h>
+#include <SHA3.h>
+#include <SHA384.h>
+#include <SHA512.h>
+#include <SHAKE.h>
+#include <XOF.h>
+#include <XTS.h>
+
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
@@ -101,9 +135,7 @@ void setup() {
 }
 
 void loop() {
-  gameStream.flush();
-  gameStream.stop();
-  JsonDocument open_game = streamBoardState(lichessToken, gameId, gameStream);
+  reinitializeGameStream();
   serializeJson(open_game, Serial);
   Serial.println();
 
@@ -115,10 +147,8 @@ void loop() {
       String body = "level=1";
       gameId = challengeTheAI(lichessToken, body)["id"].as<String>();
 
-      //this should have updated gameId
-      gameStream.flush();
-      gameStream.stop();
-      open_game = streamBoardState(lichessToken, gameId, gameStream);
+      //this should update gameId
+      reinitializeGameStream();
 
       serializeJson(open_game, Serial);
       Serial.println();
@@ -206,4 +236,9 @@ void recieveMoveFromGameStream(){
     }
 }
 
+void reinitializeGameStream(){
+  gameStream.flush();
+  gameStream.stop();
+  JsonDocument open_game = streamBoardState(lichessToken, gameId, gameStream);
+}
 
