@@ -108,9 +108,6 @@ void loop() {
   Serial.println();
 
   while(open_game["state"]["status"].as<String>() != "started"){//if game is ended start a new one
-    gameStream.flush();
-    gameStream.stop();
-
     if (digitalRead(PRG_BTN) == LOW) {
       delay(5); // debounce
 
@@ -119,6 +116,8 @@ void loop() {
       gameId = challengeTheAI(lichessToken, body)["id"].as<String>();
 
       //this should have updated gameId
+      gameStream.flush();
+      gameStream.stop();
       open_game = streamBoardState(lichessToken, gameId, gameStream);
 
       serializeJson(open_game, Serial);
@@ -148,7 +147,21 @@ void loop() {
     }
 
     //if there is a move to recieve recieve it
-    if(gameStream.connected()){
+    recieveMoveFromGameStream();
+
+    delay(2);
+  }
+
+}
+
+String getLastMove(String moves_list){
+  int index_of_last_space = moves_list.lastIndexOf(' ') + 1;//if this returns -1 I get 0 so it is start of string
+  return moves_list.substring(index_of_last_space);
+}
+
+
+void recieveMoveFromGameStream(){
+  if(gameStream.connected()){
       while(gameStream.available()){
         String line;
         line = gameStream.readStringUntil('\n');
@@ -189,20 +202,8 @@ void loop() {
         }else{
           continue;
         }
-
-        
       }
     }
-
-    delay(2);
-  }
-
 }
-
-String getLastMove(String moves_list){
-  int index_of_last_space = moves_list.lastIndexOf(' ') + 1;//if this returns -1 I get 0 so it is start of string
-  return moves_list.substring(index_of_last_space);
-}
-
 
 
