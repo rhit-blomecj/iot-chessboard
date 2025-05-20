@@ -156,11 +156,21 @@ void setupMCP() {
 }
 
 void disableInterrupt() {
-  disableInterrupt16(0x0000);
+  for (int i = 0; i < NUM_MCPS; i++) {
+    disableInterrupt16(0xFFFF);
+  }
 }
 
 void enableInterrupt() {
-  
+  for (int i = 0; i < NUM_MCPS; i++) {
+    mcp[i].mirrorInterrupts(true);      // INTA reflects GPA and GPB
+    mcp[i].setInterruptPolarity(2);
+    mcp[i].getInterruptCaptureRegister(); // clears INTCAP and interrupt flags
+    mcp[i].enableInterrupt16(0xFFFF, CHANGE);
+    mcp[i].getInterruptCaptureRegister();
+  }
+  pinMode(MCP_INTERRUPT_PIN, INPUT_PULLUP); 
+  attachInterrupt(digitalPinToInterrupt(MCP_INTERRUPT_PIN), handle_mcp_interrupt, FALLING);
 }
 
 void ignoreInterruptCastle() {
