@@ -1,7 +1,7 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
-#include "arduino_secrets.h"
+#include "mcp_logic.h"
 #include "lichess_api.h"
 #include "bluetooth_wifi_setup.h"
 #include "oled_functions.h"

@@ -1,5 +1,9 @@
+#ifndef mcp_logic
+#define mcp_logic
+
 #include <SPI.h>
 #include "MCP23S17.h"
+#include <Adafruit_NeoPixel.h>
 
 // SPI Pins (HSPI)
 #define HSPI_MOSI_PIN 35
@@ -10,6 +14,22 @@
 #define MCP_INTERRUPT_PIN 4 // any gpio pin
 
 #define NUM_MCPS 4
+
+#define HALL_PIN 47
+
+// LED matrix size
+#define WIDTH       8
+#define HEIGHT      8
+#define NUMPIXELS   (WIDTH * HEIGHT)
+
+// Create NeoPixel object
+Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+// Colors
+uint32_t RED  = strip.Color(255, 0, 0);
+uint32_t BLUE = strip.Color(0, 0, 255);
+uint32_t OFF  = strip.Color(0, 0, 0);
+uint32_t WHITE = strip.Color(120,120,120);
 
 SPIClass *spi3 = NULL;
 MCP23S17 mcp[NUM_MCPS];
@@ -135,59 +155,137 @@ void setupMCP() {
   Serial.println("Setup complete. Waiting for interrupts...");
 }
 
-String getMoveFromHardware() {
-  if (mcp_interrupt_flag) {
+void disableInterrupt() {
+  disableInterrupt16(0x0000);
+}
 
-    Serial.println("----------------------------------");
-    Serial.println("ESP32 Interrupt Triggered!");
-    bool interrupt_found_on_mcp = false;
+void enableInterrupt() {
+  
+}
 
-    for (int i = 0; i < NUM_MCPS; i++) { 
-      uint16_t intFlags = mcp[i].getInterruptFlagRegister();
-      
-      if (intFlags != 0) {
-        interrupt_found_on_mcp = true;
+void ignoreInterruptCastle() {
+  int count = 0;
+  while (count < 2) {
+    if (mcp_interrupt_flag) {
 
-        uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
+      Serial.println("----------------------------------");
+      Serial.println("ESP32 Interrupt Triggered for Castle");
+      bool interrupt_found_on_mcp = false;
 
-        for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
-          if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
-            
-            // get chess pos
-            String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-            bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
+      for (int i = 0; i < NUM_MCPS; i++) { 
+        uint16_t intFlags = mcp[i].getInterruptFlagRegister();
 
-            // Serial.print("      Pin ");
-            // if (pin_idx_on_mcp < 8) { 
-            //   Serial.print("GPA: "); 
-            //   Serial.println(pin_idx_on_mcp); 
-            // } else { 
-            //   Serial.print("GPB: "); 
-            //   Serial.println(pin_idx_on_mcp - 8);
-            // }
-            
-            Serial.print(chess_pos); 
-            Serial.print(" changed to: ");
-            Serial.println(current_pin_state ? "HIGH" : "LOW");
-            
-            // ---chess board logic---
-            // TODO: add the chessboard logic (chess_pos is the string)
+        if (intFlags != 0) {
+          interrupt_found_on_mcp = true;
+
+          uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
+
+          for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
+            if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
+              
+              // get chess pos
+              String chess_pos = getChessPosition(i, pin_idx_on_mcp);
+              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp)
+              bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
+              
+              Serial.print(chess_pos); 
+              Serial.print(" changed to: ");
+              Serial.println(current_pin_state ? "HIGH" : "LOW");
+
+              //eg ec
+
+              strip.setNeoPixelColor(neo_pos, green);
+              
+              // ---chess board logic---
+              // TODO: add the chessboard logic (chess_pos is the string)
+            }
           }
         }
       }
-    }
-    
-    if (!interrupt_found_on_mcp) {
-        Serial.println("  Interrupt flag was set on ESP32, but no MCP reported active interrupt flags.");
-        Serial.println("  This could be due to rapid clearing or noise. Ensuring all MCPs are clear...");
-        for (int m = 0; m < NUM_MCPS; m++) {
-            mcp[m].getInterruptCaptureRegister(); 
-        }
-    }
+      
+      if (!interrupt_found_on_mcp) {
+          for (int m = 0; m < NUM_MCPS; m++) {
+              mcp[m].getInterruptCaptureRegister(); 
+          }
+      }
 
-    mcp_interrupt_flag = false;
-    Serial.println("----------------------------------");
+      mcp_interrupt_flag = false;
+      Serial.println("----------------------------------");
+    }
   }
+}
+
+String getMoveFromHardware() {
+  String finalMove = "";
+  bool move_not_completed = true;
+  int highCount = 0;
+  int lowCount = 0;
+  while (move_not_completed) {
+    if (mcp_interrupt_flag) {
+
+      Serial.println("----------------------------------");
+      Serial.println("ESP32 Interrupt Triggered!");
+      bool interrupt_found_on_mcp = false;
+
+      for (int i = 0; i < NUM_MCPS; i++) { 
+        uint16_t intFlags = mcp[i].getInterruptFlagRegister();
+
+        if (intFlags != 0) {
+          interrupt_found_on_mcp = true;
+
+          uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
+
+          for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
+            if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
+              
+              // get chess pos
+              String chess_pos = getChessPosition(i, pin_idx_on_mcp);
+              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp)
+              bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
+              
+              Serial.print(chess_pos); 
+              Serial.print(" changed to: ");
+              Serial.println(current_pin_state ? "HIGH" : "LOW");
+
+              //eg ec
+
+              if (current_pin_state) {
+                if (highCount == 0) { // picking up your own piece
+                  strip.setPixelColor(neo_pos, GREEN);
+                  finalMove += chess_pos;
+                }
+                if (highCount > 0 && lowCount == 0) { // picking up enemy piece
+                  // taking enemy piece
+                  // turning on blue
+                  strip.setPixelColor(neo_pos, BLUE);
+                }
+                highCount++;
+              } else {
+                // putting down a piece (finish a move or finish taking)
+                finalMove += chess_pos;
+                lowCount++;
+                strip.setPixelColor(neo_pos, GREEN);
+                move_not_completed = false;
+              }
+              
+              // ---chess board logic---
+              // TODO: add the chessboard logic (chess_pos is the string)
+            }
+          }
+        }
+      }
+      
+      if (!interrupt_found_on_mcp) {
+          for (int m = 0; m < NUM_MCPS; m++) {
+              mcp[m].getInterruptCaptureRegister(); 
+          }
+      }
+
+      mcp_interrupt_flag = false;
+      Serial.println("----------------------------------");
+    }
+  }
+  return finalMove;
 }
 
 String getChessPosition(int mcp_idx, int pin_on_mcp) {
@@ -231,3 +329,4 @@ int getNeoPixelIndex(int mcp_idx, int pin_on_mcp) {
   return rank_index * 8 + file_index;
 }
 
+#endif
