@@ -141,13 +141,13 @@ void setupMCP() {
   Serial.println("Setup complete. Waiting for interrupts...");
 }
 
-void disableAllInterrupts() {
+void disableAllMCPInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
     disableInterrupt(0xFFFF);
   }
 }
 
-void enableAllInterrupts() {
+void enableAllMCPInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
     mcp[i].mirrorInterrupts(true);      // INTA reflects GPA and GPB
     mcp[i].setInterruptPolarity(2);

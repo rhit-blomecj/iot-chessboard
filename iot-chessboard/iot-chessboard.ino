@@ -100,10 +100,7 @@ void loop() {
   Serial.println("Last Move in Game was: " + lastMove);
 
   //highlight last move in game
-  String lastMoveStartTile = lastMove.substring(0,2);
-  String lastMoveEndTile = lastMove.substring(2,4);
-  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), GREEN);
-  setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), GREEN);
+  displayMoveOnNeoPixel(lastMove, GREEN);
 
   //will probably need to have a way to determine if this was your or your oponents move so we know how to handle it
   //I could move through the moves string switching between white and blacks turns until I know whose turn it is (we should already know our color at this point so we would know whose turn it is then)
@@ -112,39 +109,41 @@ void loop() {
   //  disable interrupts and wait for user to hit button to reenable then continue game
   //} else{// your move was the last move so you are just waiting for the oponent to get on with it
   //  leave interrupts enabled (or enable them if they don't start that way) and continue to the normal game loop waiting for oponent to move
+  //  could potentially disable interrupts until next oponnents move recieved that way no weird behaviour can occur while you shouldn't be moving your pieces anyway (if we disable interrupts here we just need to wait for button press to enable them again in the game loop because we need to wait for your oponnents move to be streamed)
   //}
   
 
   gameState = RUNNING;
 
   while(gameState == RUNNING){
+
+    
     //if we have a move to send send it
-    if(Serial.available()){
-      String move = Serial.readString();
+    String move = getMoveFromHardware();
+    if (move.length() > 0 ){
       Serial.println("Sending Move: ");
       JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
       bool isValidMove = makeMoveResponse["ok"].as<bool>();//if its valid ok holds true if its not I think I would get null which hopefully is false
       if(!isValidMove){
-        //clear NeoPixels
-        //neoPixel.displayInvalidMove(move);
+        clearAllPixels();
+        //display Invalid Move
+        displayMoveOnNeoPixel(move, RED);
         //disable interrupts to allow fixing your boardstate
-        
-        while(true){//wait until button pushed to reenable interrupts
-          if (digitalRead(PRG_BTN) == LOW) {
-            delay(5); // debounce
-            //enable interrupts after button press
-            // wait for USER release
-            while (digitalRead(PRG_BTN) == LOW);
-            break;
-          }
+        disableInterruptsUntilButtonPress();
+
+      } else {//move was valid
+        clearAllPixels();
+        //display Valid Move
+        displayMoveOnNeoPixel(move, GREEN);
+
+        if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
+          //ignore next two interrupts to allow finishing the castle move
+          ignoreInterruptCastle();// We need to get the user instructions that after moving the king for a castle to wait until lichess responds with valid or invalid and if it is valid then you can move the rook
         }
-      } else if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
-        //ignore next two interrupts to allow finishing the castle move
-        
       }
     }
 
-    //if there is a move to recieve it
+    //if there is a move to recieve recieve it
     recieveMoveFromGameStream();
 
     delay(2);
@@ -173,15 +172,25 @@ void recieveMoveFromGameStream(){
 
           String moves_list = nextStreamedEvent["moves"].as<String>();
 
-          setHasKingMovedThisGameFromMovesString(moves_list);//after every move update if your king has moved this game or not
+          setHasKingMovedThisGameFromMovesString(moves_list);//after every move update on website if your king has moved this game or not
           
           lastMove = getLastMove(moves_list);
           Serial.println("Move: " + lastMove);
+
+          clearAllPixels();
+          //display Valid Move
+          displayMoveOnNeoPixel(move, GREEN);
 
           if(nextStreamedEvent["status"].as<String>() != "started"){
             gameState = GAME_OVER;
           }
           
+          // if(Opponents Move was last move){
+          //   disable interrupts until button pressed so player can update their board
+          // } else {//was your move that was last streamed
+          //   do nothing just let this carry on so we can wait for oponents move
+          //   could potentially disable interrupts until next oponnents move recieved that way no weird behaviour can occur while you shouldn't be moving your pieces anyway (if we disable interrupts here we don't need to disable interrupts in the top of this if we just need to wait for button press to enable them again)
+          // }
 
           //parse from website to indexPairs and test values This is where we would send stuff to the hard ware
           String promoteTo = "";
@@ -243,3 +252,25 @@ bool isCastleMove(String move){
   }
 }
 
+void disableInterruptsUntilButtonPress(){
+  disableAllMCPInterrupts();
+  
+  while(true){//wait until button pushed to reenable interrupts
+    if (digitalRead(PRG_BTN) == LOW) {
+      delay(5); // debounce
+      //enable interrupts after button press
+      enableAllMCPInterrupts();
+      // wait for USER release
+      while (digitalRead(PRG_BTN) == LOW);
+      break;
+    }
+  }
+}
+
+
+void displayMoveOnNeoPixel(String move, uint32_t color){
+  String lastMoveStartTile = move.substring(0,2);
+  String lastMoveEndTile = move.substring(2,4);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), color);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), color);
+}
