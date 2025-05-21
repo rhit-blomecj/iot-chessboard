@@ -1,37 +1,3 @@
-#include <AES.h>
-#include <AuthenticatedCipher.h>
-#include <BLAKE2b.h>
-#include <BLAKE2s.h>
-#include <BigNumberUtil.h>
-#include <BlockCipher.h>
-#include <CTR.h>
-#include <ChaCha.h>
-#include <ChaChaPoly.h>
-#include <Cipher.h>
-#include <Crypto.h>
-#include <Curve25519.h>
-#include <EAX.h>
-#include <Ed25519.h>
-#include <GCM.h>
-#include <GF128.h>
-#include <GHASH.h>
-#include <HKDF.h>
-#include <Hash.h>
-#include <KeccakCore.h>
-#include <NoiseSource.h>
-#include <OMAC.h>
-#include <P521.h>
-#include <Poly1305.h>
-#include <RNG.h>
-#include <SHA224.h>
-#include <SHA256.h>
-#include <SHA3.h>
-#include <SHA384.h>
-#include <SHA512.h>
-#include <SHAKE.h>
-#include <XOF.h>
-#include <XTS.h>
-
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
@@ -173,7 +139,25 @@ void loop() {
     if(Serial.available()){
       String move = Serial.readString();
       Serial.println("Sending Move: ");
-      makeBoardMove(lichessToken, gameId, move);
+      JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
+      bool isValidMove = makeMoveResponse["ok"].as<Boolean>();//if its valid ok holds true if its not I think I would get null which hopefully is false
+      if(!isValidMove){
+        //clear NeoPixels
+        //neoPixel.displayInvalidMove(move);
+        //disable interrupts
+        
+        while(true){//wait until button pushed to reenable interrupts
+          if (digitalRead(PRG_BTN) == LOW) {
+            delay(5); // debounce
+            //enable interrupts after button press
+            // wait for USER release
+            while (digitalRead(PRG_BTN) == LOW);
+            break;
+          }
+        }
+      } else if(){//how to accurately check if a move is a castle? I have the list of moves so I could calculate it from the list of moves on start up and change it in here
+
+      }
     }
 
     //if there is a move to recieve recieve it
