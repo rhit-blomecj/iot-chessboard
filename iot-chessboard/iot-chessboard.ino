@@ -101,9 +101,7 @@ void setup() {
 }
 
 void loop() {
-  gameStream.flush();
-  gameStream.stop();
-  JsonDocument open_game = streamBoardState(lichessToken, gameId, gameStream);
+  reinitializeGameStream();
   serializeJson(open_game, Serial);
   Serial.println();
 
@@ -115,10 +113,8 @@ void loop() {
       String body = "level=1";
       gameId = challengeTheAI(lichessToken, body)["id"].as<String>();
 
-      //this should have updated gameId
-      gameStream.flush();
-      gameStream.stop();
-      open_game = streamBoardState(lichessToken, gameId, gameStream);
+      //this should update gameId
+      reinitializeGameStream();
 
       serializeJson(open_game, Serial);
       Serial.println();
@@ -143,7 +139,25 @@ void loop() {
     if(Serial.available()){
       String move = Serial.readString();
       Serial.println("Sending Move: ");
-      makeBoardMove(lichessToken, gameId, move);
+      JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
+      bool isValidMove = makeMoveResponse["ok"].as<Boolean>();//if its valid ok holds true if its not I think I would get null which hopefully is false
+      if(!isValidMove){
+        //clear NeoPixels
+        //neoPixel.displayInvalidMove(move);
+        //disable interrupts
+        
+        while(true){//wait until button pushed to reenable interrupts
+          if (digitalRead(PRG_BTN) == LOW) {
+            delay(5); // debounce
+            //enable interrupts after button press
+            // wait for USER release
+            while (digitalRead(PRG_BTN) == LOW);
+            break;
+          }
+        }
+      } else if(){//how to accurately check if a move is a castle? I have the list of moves so I could calculate it from the list of moves on start up and change it in here
+
+      }
     }
 
     //if there is a move to recieve recieve it
@@ -206,4 +220,9 @@ void recieveMoveFromGameStream(){
     }
 }
 
+void reinitializeGameStream(){
+  gameStream.flush();
+  gameStream.stop();
+  JsonDocument open_game = streamBoardState(lichessToken, gameId, gameStream);
+}
 
