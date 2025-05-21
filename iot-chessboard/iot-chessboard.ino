@@ -7,53 +7,9 @@
 #include "oled_functions.h"
 #include "wifi_setup.h"
 #include "global_preferences.h"
+#include "neo_pixel.h"
 
 #define PRG_BTN       0       // user button (PRG) pin
-
-struct IndexPair { 
-  int file_index;
-  int rank_index;
-};
-
-struct Move {
-  String start_tile;
-  String end_tile;
-};
-
-String translateIndexesToFileAndRank(IndexPair pair){
-  //auto promotes to Queen
-  char file = 'a' + pair.file_index;
-  char rank = '1' + pair.rank_index;
-
-  char c_strng_tile [3] = "12";
-
-  c_strng_tile [0] = file;
-  c_strng_tile [1] = rank;
-
-  String tile = String(c_strng_tile);
-
-  return tile;
-}
-
-IndexPair translateFileAndRankToIndexes(String tile){
-  const char * c_str_tile = tile.c_str();//should only be size 3 because it should be something like "a1"
-
-  IndexPair pair;
-
-  pair.file_index = (int) (c_str_tile[0] - 'a');
-  pair.rank_index = (int) (c_str_tile[1] - '1');
-  
-  return pair;
-}
-
-int translateIndexesToNeoPixel(IndexPair pair){
-  const int FILE_WIDTH = 8;
-  if(pair.rank_index%2 == 0){
-    return (pair.rank_index * FILE_WIDTH + pair.file_index);
-  } else{
-    return (pair.rank_index * FILE_WIDTH + (FILE_WIDTH - pair.file_index));
-  }
-}
 
 //in the future may split further to show winners
 enum GameState {
@@ -68,6 +24,7 @@ enum Color {
 
 enum Color color;
 bool hasKingMovedThisGame;
+bool isUsersTurn;
 
 enum GameState gameState = GAME_OVER;
 
@@ -110,6 +67,11 @@ void setup() {
 
   accountId = getAccountInfo(lichessToken)["id"].as<String>();
   Serial.println("Account ID: " + accountId);
+
+  //this enables interrupts and to avoid weird behavior I think I should put this at the bottom so the interrupts are only enabled during a game?
+  setupMCP();//I could also just run the disable under this function and enable them when I want them enabled
+
+  //NEOPIXEL SETUP GOES HERE IF NECESSARY
 }
 
 void loop() {
@@ -136,39 +98,49 @@ void loop() {
   //we should have correct open_game so we can pull the last move from the game here
   String moves_list = open_game["state"]["moves"].as<String>();
   lastMove = getLastMove(moves_list);
+  Serial.println("Last Move in Game was: " + lastMove);
 
-  Serial.println("In Setup from gameStream Last Move was: " + lastMove);
+  //highlight last move in game
+  displayMoveOnNeoPixel(lastMove, GREEN);
+
+  if(isUsersTurn){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
+    disableInterruptsUntilButtonPress();
+  } else{// your move was the last move so you are just waiting for the oponent to get on with it
+    disableAllMCPInterrupts();
+  }
+  
 
   gameState = RUNNING;
 
   while(gameState == RUNNING){
+
+    
     //if we have a move to send send it
-    if(Serial.available()){
-      String move = Serial.readString();
+    String move = getMoveFromHardware();
+    if (move.length() > 0 ){
       Serial.println("Sending Move: ");
       JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
       bool isValidMove = makeMoveResponse["ok"].as<bool>();//if its valid ok holds true if its not I think I would get null which hopefully is false
       if(!isValidMove){
-        //clear NeoPixels
-        //neoPixel.displayInvalidMove(move);
+        clearAllPixels();
+        //display Invalid Move
+        displayMoveOnNeoPixel(move, RED);
         //disable interrupts to allow fixing your boardstate
-        
-        while(true){//wait until button pushed to reenable interrupts
-          if (digitalRead(PRG_BTN) == LOW) {
-            delay(5); // debounce
-            //enable interrupts after button press
-            // wait for USER release
-            while (digitalRead(PRG_BTN) == LOW);
-            break;
-          }
+        disableInterruptsUntilButtonPress();
+
+      } else {//move was valid
+        clearAllPixels();
+        //display Valid Move
+        displayMoveOnNeoPixel(move, GREEN);
+
+        if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
+          //ignore next two interrupts to allow finishing the castle move
+          ignoreInterruptCastle();// We need to get the user instructions that after moving the king for a castle to wait until lichess responds with valid or invalid and if it is valid then you can move the rook
         }
-      } else if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
-        //ignore next two interrupts to allow finishing the castle move
-        
       }
     }
 
-    //if there is a move to recieve it
+    //if there is a move to recieve recieve it
     recieveMoveFromGameStream();
 
     delay(2);
@@ -197,27 +169,35 @@ void recieveMoveFromGameStream(){
 
           String moves_list = nextStreamedEvent["moves"].as<String>();
 
-          setHasKingMovedThisGameFromMovesString(moves_list);//after every move update if your king has moved this game or not
+          setHasKingMovedThisGameFromMovesString(moves_list);//after every move update on website if your king has moved this game or not
+
+          //should toggle whose turn it is
+          //if this for some reason causes a bug we can instead calculate it again by calling setIsUsersTurn(String moves);
+          isUsersTurn = !isUsersTurn;
           
           lastMove = getLastMove(moves_list);
           Serial.println("Move: " + lastMove);
+
+          clearAllPixels();
+          //display Valid Move
+          displayMoveOnNeoPixel(lastMove, GREEN);
 
           if(nextStreamedEvent["status"].as<String>() != "started"){
             gameState = GAME_OVER;
           }
           
+          if(isUsersTurn){//oponent was last to move so you need to update their side of the board then hit press button
+            enableInterruptsOnButtonPress();
+          } else {//was your move that was last streamed disable the interrupts until it is your turn again then update enemies side of board and press button to reenable interrupts
+            disableAllMCPInterrupts();
+          }
 
-          //parse from website to indexPairs and test values This is where we would send stuff to the hard ware
+          //
           String promoteTo = "";
           if(lastMove.length() > 4) {//promotion occured
             promoteTo = lastMove.substring(4,5);
           }
 
-          IndexPair startIndexes = translateFileAndRankToIndexes(lastMove.substring(0,2));
-          IndexPair endIndexes = translateFileAndRankToIndexes(lastMove.substring(2,4));
-          Serial.printf("start_file_index: %d\nstart_rank_index: %d\nend_file_index: %d\nend_rank_index: %d\n", startIndexes.file_index, startIndexes.rank_index, endIndexes.file_index, endIndexes.rank_index);
-          Serial.println("Translated back into UCI: " + translateIndexesToFileAndRank(startIndexes) + translateIndexesToFileAndRank(endIndexes));
-          Serial.printf("Translated to NeoPixel Start: %d\nTranslated to NeoPixel End: %d\n", translateIndexesToNeoPixel(startIndexes), translateIndexesToNeoPixel(endIndexes));
           
 
           Serial.print("Recieved Event: ");
@@ -238,20 +218,47 @@ JsonDocument reinitializeGameStream(){
   serializeJson(open_game, Serial);
   Serial.println();
 
-  setPlayersColor(open_game);
+  setUsersColor(open_game);
 
-  setHasKingMovedThisGameFromMovesString(open_game["state"]["moves"].as<String>());
+  String moves = open_game["state"]["moves"].as<String>();
+
+  setIsUsersTurn(moves);
+
+  setHasKingMovedThisGameFromMovesString(moves);
   return open_game;
 }
 
-void setPlayersColor(JsonDocument open_game){
+void setUsersColor(JsonDocument open_game){
   if(open_game["white"]["id"].as<String>() == accountId){
     color = LIGHT;
   } else if(open_game["black"]["id"].as<String>() == accountId){
     color = DARK;
   }
 
-  Serial.println("setPlayersColor: " + color);
+  Serial.println("setUsersColor: " + color);
+}
+
+void setIsUsersTurn(String moves){
+  if(color == LIGHT){
+    isUsersTurn = true;
+  } else if (color == DARK){
+    isUsersTurn = false;
+  }
+
+  // if moves string is empty we just set correct values
+  if(moves.length() == 0){
+    return;
+  }
+
+  String tempMoves = moves;
+  int index = 0;
+  //guarunteed to execute once because we know the string is not empty
+  do {//toggle
+    tempMoves = tempMoves.substring(index);//this goes at top and we make index starts as 0 so I'm not trying to substring a negative index
+    isUsersTurn = !isUsersTurn;
+    index = tempMoves.indexOf(" ");
+  } while(index != -1);
+  
 }
 
 void setHasKingMovedThisGameFromMovesString(String moves){
@@ -272,3 +279,28 @@ bool isCastleMove(String move){
   }
 }
 
+void enableInterruptsOnButtonPress(){
+  while(true){//wait until button pushed to reenable interrupts
+    if (digitalRead(PRG_BTN) == LOW) {
+      delay(5); // debounce
+      //enable interrupts after button press
+      enableAllMCPInterrupts();
+      // wait for USER release
+      while (digitalRead(PRG_BTN) == LOW);
+      break;
+    }
+  }
+}
+
+void disableInterruptsUntilButtonPress(){
+  disableAllMCPInterrupts();
+  enableInterruptsOnButtonPress();
+}
+
+
+void displayMoveOnNeoPixel(String move, uint32_t color){
+  String lastMoveStartTile = move.substring(0,2);
+  String lastMoveEndTile = move.substring(2,4);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), color);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), color);
+}

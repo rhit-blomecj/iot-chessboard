@@ -2,8 +2,8 @@
 #define mcp_logic
 
 #include <SPI.h>
-#include <Adafruit_NeoPixel.h>
 #include "MCP23S17.h"
+#include "neo_pixel.h"
 
 // SPI Pins (HSPI)
 #define HSPI_MOSI_PIN 35
@@ -16,22 +16,6 @@
 #define NUM_MCPS 4
 
 #define HALL_PIN 47
-
-#define LED_PIN 48
-// LED matrix size
-#define WIDTH       8
-#define HEIGHT      8
-#define NUMPIXELS   (WIDTH * HEIGHT)
-
-// Create NeoPixel object
-Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-// Colors
-uint32_t RED  = strip.Color(255, 0, 0);
-uint32_t GREEN = strip.Color(0, 255, 0);
-uint32_t BLUE = strip.Color(0, 0, 255);
-uint32_t OFF  = strip.Color(0, 0, 0);
-//uint32_t WHITE = strip.Color(120,120,120);//this has a declaration in HT_Display.h so we should not redeclare it
 
 SPIClass *spi3 = NULL;
 MCP23S17 mcp[NUM_MCPS] = {NULL, NULL, NULL, NULL};//might need to be
@@ -105,10 +89,6 @@ void setupMCP() {
   bool all_mcp_ok = true;
   for (int i = 0; i < NUM_MCPS; i++) {
     Serial.print("Initializing MCP "); Serial.println(i);
-    /*
-      MCP23S17(int select, __SPI_CLASS__ * spi);
-      MCP23S17(int select, int address = 0x00, __SPI_CLASS__ * spi = &SPI);
-    */
     mcp[i] = MCP23S17(MCP_CS_PIN, mcp_addresses[i], spi3);
 
     if (!mcp[i].begin()) {
@@ -161,13 +141,13 @@ void setupMCP() {
   Serial.println("Setup complete. Waiting for interrupts...");
 }
 
-void disableAllInterrupts() {
+void disableAllMCPInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
     disableInterrupt(0xFFFF);
   }
 }
 
-void enableAllInterrupts() {
+void enableAllMCPInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
     mcp[i].mirrorInterrupts(true);      // INTA reflects GPA and GPB
     mcp[i].setInterruptPolarity(2);
@@ -242,16 +222,12 @@ void ignoreInterruptCastle() {
               
               // get chess pos
               String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
+              // int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
               bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
               
-              // Serial.print(chess_pos); 
-              // Serial.print(" changed to: ");
-              // Serial.println(current_pin_state ? "HIGH" : "LOW");
-
-              //eg ec
-
-              strip.setPixelColor(neo_pos, GREEN);
+              //this is my plan for interacting with the NeoPixel
+              int neo_pos = translateFileAndRankToNeoPixel(chess_pos);
+              setPixelColor(neo_pos, GREEN);
             }
           }
         }
@@ -294,36 +270,33 @@ String getMoveFromHardware() {
               
               // get chess pos
               String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
+              // int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
               bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
               
-              // Serial.print(chess_pos); 
-              // Serial.print(" changed to: ");
-              // Serial.println(current_pin_state ? "HIGH" : "LOW");
+              //this is my plan for interacting with the NeoPixel
+              int neo_pos = translateFileAndRankToNeoPixel(chess_pos);
+              
 
               //eg ec
 
               if (current_pin_state) {
                 if (highCount == 0) { // picking up your own piece
-                  strip.setPixelColor(neo_pos, GREEN);
+                  setPixelColor(neo_pos, GREEN);
                   finalMove += chess_pos;
                 }
                 if (highCount > 0 && lowCount == 0) { // picking up enemy piece
                   // taking enemy piece
                   // turning on blue
-                  strip.setPixelColor(neo_pos, BLUE);
+                  setPixelColor(neo_pos, BLUE);
                 }
                 highCount++;
               } else {
                 // putting down a piece (finish a move or finish taking)
                 finalMove += chess_pos;
                 lowCount++;
-                strip.setPixelColor(neo_pos, GREEN);
+                setPixelColor(neo_pos, GREEN);
                 move_not_completed = false;
               }
-              
-              // ---chess board logic---
-              // TODO: add the chessboard logic (chess_pos is the string)
             }
           }
         }
