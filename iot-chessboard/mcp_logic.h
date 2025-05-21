@@ -2,8 +2,8 @@
 #define mcp_logic
 
 #include <SPI.h>
-#include "MCP23S17.h"
 #include <Adafruit_NeoPixel.h>
+#include "MCP23S17.h"
 
 // SPI Pins (HSPI)
 #define HSPI_MOSI_PIN 35
@@ -17,6 +17,7 @@
 
 #define HALL_PIN 47
 
+#define LED_PIN 48
 // LED matrix size
 #define WIDTH       8
 #define HEIGHT      8
@@ -27,12 +28,13 @@ Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // Colors
 uint32_t RED  = strip.Color(255, 0, 0);
+uint32_t GREEN = strip.Color(0, 255, 0);
 uint32_t BLUE = strip.Color(0, 0, 255);
 uint32_t OFF  = strip.Color(0, 0, 0);
-uint32_t WHITE = strip.Color(120,120,120);
+//uint32_t WHITE = strip.Color(120,120,120);//this has a declaration in HT_Display.h so we should not redeclare it
 
 SPIClass *spi3 = NULL;
-MCP23S17 mcp[NUM_MCPS];
+MCP23S17 mcp[NUM_MCPS] = {NULL, NULL, NULL, NULL};//might need to be
 
 // Hardware addresses for your MCP23S17 chips
 const byte mcp_addresses[NUM_MCPS] = {0x00, 0x01, 0x02, 0x03};
@@ -103,7 +105,11 @@ void setupMCP() {
   bool all_mcp_ok = true;
   for (int i = 0; i < NUM_MCPS; i++) {
     Serial.print("Initializing MCP "); Serial.println(i);
-    mcp[i] = MCP23S17(MCP_CS_PIN, spi3, mcp_addresses[i]);
+    /*
+      MCP23S17(int select, __SPI_CLASS__ * spi);
+      MCP23S17(int select, int address = 0x00, __SPI_CLASS__ * spi = &SPI);
+    */
+    mcp[i] = MCP23S17(MCP_CS_PIN, mcp_addresses[i], spi3);
 
     if (!mcp[i].begin()) {
       Serial.print("MCP "); Serial.print(i); Serial.print(" (Addr 0x"); Serial.print(mcp_addresses[i], HEX);
@@ -155,13 +161,13 @@ void setupMCP() {
   Serial.println("Setup complete. Waiting for interrupts...");
 }
 
-void disableInterrupt() {
+void disableAllInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
-    disableInterrupt16(0xFFFF);
+    disableInterrupt(0xFFFF);
   }
 }
 
-void enableInterrupt() {
+void enableAllInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
     mcp[i].mirrorInterrupts(true);      // INTA reflects GPA and GPB
     mcp[i].setInterruptPolarity(2);
@@ -171,6 +177,47 @@ void enableInterrupt() {
   }
   pinMode(MCP_INTERRUPT_PIN, INPUT_PULLUP); 
   attachInterrupt(digitalPinToInterrupt(MCP_INTERRUPT_PIN), handle_mcp_interrupt, FALLING);
+}
+
+String getChessPosition(int mcp_idx, int pin_on_mcp) {
+  if (mcp_idx < 0 || mcp_idx >= NUM_MCPS || pin_on_mcp < 0 || pin_on_mcp > 15) {
+    return "ERR";
+  }
+
+  char file_char;
+  char rank_char;
+  int base_rank_index = mcp_idx * 2; // each mcp has 2 ranks
+  int sub_rank_offset = (pin_on_mcp / 8); // pin > 8 is 1 and pin > 0 is 0
+  int chess_rank_index = base_rank_index + sub_rank_offset; // this gives 0-7 index for ranks
+
+  rank_char = '1' + chess_rank_index;
+
+  int chess_file_index = pin_on_mcp % 8; 
+
+  file_char = 'a' + chess_file_index;
+
+  String position = "";
+  position += file_char;
+  position += rank_char;
+  return position;
+}
+
+int getNeoPixelIndex(int mcp_idx, int pin_on_mcp) {
+  if (mcp_idx < 0 || mcp_idx >= NUM_MCPS || pin_on_mcp < 0 || pin_on_mcp > 15) {
+    return -1;
+  }
+
+  int base_rank_index = mcp_idx * 2;
+  int sub_rank_offset = pin_on_mcp / 8;
+  int rank_index = base_rank_index + sub_rank_offset;
+
+  int file_index = pin_on_mcp % 8;
+
+  if (rank_index % 2 == 1) {
+    file_index = 7 - file_index;
+  }
+
+  return rank_index * 8 + file_index;
 }
 
 void ignoreInterruptCastle() {
@@ -195,19 +242,16 @@ void ignoreInterruptCastle() {
               
               // get chess pos
               String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp)
+              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
               bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
               
-              Serial.print(chess_pos); 
-              Serial.print(" changed to: ");
-              Serial.println(current_pin_state ? "HIGH" : "LOW");
+              // Serial.print(chess_pos); 
+              // Serial.print(" changed to: ");
+              // Serial.println(current_pin_state ? "HIGH" : "LOW");
 
               //eg ec
 
-              strip.setNeoPixelColor(neo_pos, green);
-              
-              // ---chess board logic---
-              // TODO: add the chessboard logic (chess_pos is the string)
+              strip.setPixelColor(neo_pos, GREEN);
             }
           }
         }
@@ -250,12 +294,12 @@ String getMoveFromHardware() {
               
               // get chess pos
               String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp)
+              int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
               bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
               
-              Serial.print(chess_pos); 
-              Serial.print(" changed to: ");
-              Serial.println(current_pin_state ? "HIGH" : "LOW");
+              // Serial.print(chess_pos); 
+              // Serial.print(" changed to: ");
+              // Serial.println(current_pin_state ? "HIGH" : "LOW");
 
               //eg ec
 
@@ -296,47 +340,6 @@ String getMoveFromHardware() {
     }
   }
   return finalMove;
-}
-
-String getChessPosition(int mcp_idx, int pin_on_mcp) {
-  if (mcp_idx < 0 || mcp_idx >= NUM_MCPS || pin_on_mcp < 0 || pin_on_mcp > 15) {
-    return "ERR";
-  }
-
-  char file_char;
-  char rank_char;
-  int base_rank_index = mcp_idx * 2; // each mcp has 2 ranks
-  int sub_rank_offset = (pin_on_mcp / 8); // pin > 8 is 1 and pin > 0 is 0
-  int chess_rank_index = base_rank_index + sub_rank_offset; // this gives 0-7 index for ranks
-
-  rank_char = '1' + chess_rank_index;
-
-  int chess_file_index = pin_on_mcp % 8; 
-
-  file_char = 'a' + chess_file_index;
-
-  String position = "";
-  position += file_char;
-  position += rank_char;
-  return position;
-}
-
-int getNeoPixelIndex(int mcp_idx, int pin_on_mcp) {
-  if (mcp_idx < 0 || mcp_idx >= NUM_MCPS || pin_on_mcp < 0 || pin_on_mcp > 15) {
-    return -1;
-  }
-
-  int base_rank_index = mcp_idx * 2;
-  int sub_rank_offset = pin_on_mcp / 8;
-  int rank_index = base_rank_index + sub_rank_offset;
-
-  int file_index = pin_on_mcp % 8;
-
-  if (rank_index % 2 == 1) {
-    file_index = 7 - file_index;
-  }
-
-  return rank_index * 8 + file_index;
 }
 
 #endif

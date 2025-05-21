@@ -36,7 +36,6 @@ String translateIndexesToFileAndRank(IndexPair pair){
 }
 
 IndexPair translateFileAndRankToIndexes(String tile){
-  //promotion will currently break this make sure before handing tile to this it pulls off the promotion char
   const char * c_str_tile = tile.c_str();//should only be size 3 because it should be something like "a1"
 
   IndexPair pair;
@@ -62,6 +61,14 @@ enum GameState {
   GAME_OVER
 };
 
+enum Color {
+  LIGHT,
+  DARK
+};
+
+enum Color color;
+bool hasKingMovedThisGame;
+
 enum GameState gameState = GAME_OVER;
 
 WiFiClientSecure gameStream;
@@ -70,6 +77,8 @@ String lichessToken;
 String gameId;
 
 String lastMove = "";
+
+String accountId;
 
 void setup() {
   Serial.begin(115200);
@@ -98,12 +107,13 @@ void setup() {
   lichessToken = prefs.getString("lichess_token");
 
   gameId = prefs.getString("game_id");
+
+  accountId = getAccountInfo(lichessToken)["id"].as<String>();
+  Serial.println("Account ID: " + accountId);
 }
 
 void loop() {
-  reinitializeGameStream();
-  serializeJson(open_game, Serial);
-  Serial.println();
+  JsonDocument open_game = reinitializeGameStream();
 
   while(open_game["state"]["status"].as<String>() != "started"){//if game is ended start a new one
     if (digitalRead(PRG_BTN) == LOW) {
@@ -115,9 +125,6 @@ void loop() {
 
       //this should update gameId
       reinitializeGameStream();
-
-      serializeJson(open_game, Serial);
-      Serial.println();
       
       
       prefs.putString("game_id", gameId);
@@ -140,11 +147,11 @@ void loop() {
       String move = Serial.readString();
       Serial.println("Sending Move: ");
       JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
-      bool isValidMove = makeMoveResponse["ok"].as<Boolean>();//if its valid ok holds true if its not I think I would get null which hopefully is false
+      bool isValidMove = makeMoveResponse["ok"].as<bool>();//if its valid ok holds true if its not I think I would get null which hopefully is false
       if(!isValidMove){
         //clear NeoPixels
         //neoPixel.displayInvalidMove(move);
-        //disable interrupts
+        //disable interrupts to allow fixing your boardstate
         
         while(true){//wait until button pushed to reenable interrupts
           if (digitalRead(PRG_BTN) == LOW) {
@@ -155,12 +162,13 @@ void loop() {
             break;
           }
         }
-      } else if(){//how to accurately check if a move is a castle? I have the list of moves so I could calculate it from the list of moves on start up and change it in here
-
+      } else if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
+        //ignore next two interrupts to allow finishing the castle move
+        
       }
     }
 
-    //if there is a move to recieve recieve it
+    //if there is a move to recieve it
     recieveMoveFromGameStream();
 
     delay(2);
@@ -188,6 +196,8 @@ void recieveMoveFromGameStream(){
 
 
           String moves_list = nextStreamedEvent["moves"].as<String>();
+
+          setHasKingMovedThisGameFromMovesString(moves_list);//after every move update if your king has moved this game or not
           
           lastMove = getLastMove(moves_list);
           Serial.println("Move: " + lastMove);
@@ -220,9 +230,45 @@ void recieveMoveFromGameStream(){
     }
 }
 
-void reinitializeGameStream(){
+JsonDocument reinitializeGameStream(){
   gameStream.flush();
   gameStream.stop();
   JsonDocument open_game = streamBoardState(lichessToken, gameId, gameStream);
+
+  serializeJson(open_game, Serial);
+  Serial.println();
+
+  setPlayersColor(open_game);
+
+  setHasKingMovedThisGameFromMovesString(open_game["state"]["moves"].as<String>());
+  return open_game;
+}
+
+void setPlayersColor(JsonDocument open_game){
+  if(open_game["white"]["id"].as<String>() == accountId){
+    color = LIGHT;
+  } else if(open_game["black"]["id"].as<String>() == accountId){
+    color = DARK;
+  }
+
+  Serial.println("setPlayersColor: " + color);
+}
+
+void setHasKingMovedThisGameFromMovesString(String moves){
+  if(color == LIGHT){
+    hasKingMovedThisGame = (moves.indexOf("e1") == -1);
+  } else if(color == DARK){
+    hasKingMovedThisGame = (moves.indexOf("e8") == -1);
+  }
+
+  Serial.println("setHasKingMovedThisGameFromMovesString: " + hasKingMovedThisGame);
+}
+
+bool isCastleMove(String move){
+  if(color == LIGHT){
+    return (!hasKingMovedThisGame && ((move == "e1g1") || (move == "e1c1")));
+  } else if(color == DARK){
+    return (!hasKingMovedThisGame && ((move == "e8g8") || (move == "e8c8")));
+  }
 }
 
