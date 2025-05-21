@@ -7,53 +7,9 @@
 #include "oled_functions.h"
 #include "wifi_setup.h"
 #include "global_preferences.h"
+#include "neo_pixel.h"
 
 #define PRG_BTN       0       // user button (PRG) pin
-
-struct IndexPair { 
-  int file_index;
-  int rank_index;
-};
-
-struct Move {
-  String start_tile;
-  String end_tile;
-};
-
-String translateIndexesToFileAndRank(IndexPair pair){
-  //auto promotes to Queen
-  char file = 'a' + pair.file_index;
-  char rank = '1' + pair.rank_index;
-
-  char c_strng_tile [3] = "12";
-
-  c_strng_tile [0] = file;
-  c_strng_tile [1] = rank;
-
-  String tile = String(c_strng_tile);
-
-  return tile;
-}
-
-IndexPair translateFileAndRankToIndexes(String tile){
-  const char * c_str_tile = tile.c_str();//should only be size 3 because it should be something like "a1"
-
-  IndexPair pair;
-
-  pair.file_index = (int) (c_str_tile[0] - 'a');
-  pair.rank_index = (int) (c_str_tile[1] - '1');
-  
-  return pair;
-}
-
-int translateIndexesToNeoPixel(IndexPair pair){
-  const int FILE_WIDTH = 8;
-  if(pair.rank_index%2 == 0){
-    return (pair.rank_index * FILE_WIDTH + pair.file_index);
-  } else{
-    return (pair.rank_index * FILE_WIDTH + (FILE_WIDTH - pair.file_index));
-  }
-}
 
 //in the future may split further to show winners
 enum GameState {
@@ -110,6 +66,11 @@ void setup() {
 
   accountId = getAccountInfo(lichessToken)["id"].as<String>();
   Serial.println("Account ID: " + accountId);
+
+  //this enables interrupts and to avoid weird behavior I think I should put this at the bottom so the interrupts are only enabled during a game?
+  setupMCP();//I could also just run the disable under this function and enable them when I want them enabled
+
+  //NEOPIXEL SETUP GOES HERE IF NECESSARY
 }
 
 void loop() {
@@ -136,8 +97,23 @@ void loop() {
   //we should have correct open_game so we can pull the last move from the game here
   String moves_list = open_game["state"]["moves"].as<String>();
   lastMove = getLastMove(moves_list);
+  Serial.println("Last Move in Game was: " + lastMove);
 
-  Serial.println("In Setup from gameStream Last Move was: " + lastMove);
+  //highlight last move in game
+  String lastMoveStartTile = lastMove.substring(0,2);
+  String lastMoveEndTile = lastMove.substring(2,4);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), GREEN);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), GREEN);
+
+  //will probably need to have a way to determine if this was your or your oponents move so we know how to handle it
+  //I could move through the moves string switching between white and blacks turns until I know whose turn it is (we should already know our color at this point so we would know whose turn it is then)
+  //^ not super elegant but I know it would work
+  //if(lastMove was Oponents){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
+  //  disable interrupts and wait for user to hit button to reenable then continue game
+  //} else{// your move was the last move so you are just waiting for the oponent to get on with it
+  //  leave interrupts enabled (or enable them if they don't start that way) and continue to the normal game loop waiting for oponent to move
+  //}
+  
 
   gameState = RUNNING;
 
@@ -213,11 +189,6 @@ void recieveMoveFromGameStream(){
             promoteTo = lastMove.substring(4,5);
           }
 
-          IndexPair startIndexes = translateFileAndRankToIndexes(lastMove.substring(0,2));
-          IndexPair endIndexes = translateFileAndRankToIndexes(lastMove.substring(2,4));
-          Serial.printf("start_file_index: %d\nstart_rank_index: %d\nend_file_index: %d\nend_rank_index: %d\n", startIndexes.file_index, startIndexes.rank_index, endIndexes.file_index, endIndexes.rank_index);
-          Serial.println("Translated back into UCI: " + translateIndexesToFileAndRank(startIndexes) + translateIndexesToFileAndRank(endIndexes));
-          Serial.printf("Translated to NeoPixel Start: %d\nTranslated to NeoPixel End: %d\n", translateIndexesToNeoPixel(startIndexes), translateIndexesToNeoPixel(endIndexes));
           
 
           Serial.print("Recieved Event: ");
