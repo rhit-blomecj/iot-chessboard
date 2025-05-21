@@ -77,7 +77,7 @@ void setPixelColor(int neo_pos, uint32_t color){
 }
 
 void clearPixel(int neo_pos){
-  strip.setPixelColor(neo_pos, OFF)
+  strip.setPixelColor(neo_pos, OFF);
 }
 
 void clearAllPixels(){

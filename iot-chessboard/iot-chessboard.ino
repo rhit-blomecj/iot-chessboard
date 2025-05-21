@@ -179,7 +179,7 @@ void recieveMoveFromGameStream(){
 
           clearAllPixels();
           //display Valid Move
-          displayMoveOnNeoPixel(move, GREEN);
+          displayMoveOnNeoPixel(lastMove, GREEN);
 
           if(nextStreamedEvent["status"].as<String>() != "started"){
             gameState = GAME_OVER;
@@ -192,7 +192,7 @@ void recieveMoveFromGameStream(){
           //   could potentially disable interrupts until next oponnents move recieved that way no weird behaviour can occur while you shouldn't be moving your pieces anyway (if we disable interrupts here we don't need to disable interrupts in the top of this if we just need to wait for button press to enable them again)
           // }
 
-          //parse from website to indexPairs and test values This is where we would send stuff to the hard ware
+          //
           String promoteTo = "";
           if(lastMove.length() > 4) {//promotion occured
             promoteTo = lastMove.substring(4,5);
