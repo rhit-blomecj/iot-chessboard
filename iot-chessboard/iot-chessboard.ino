@@ -63,15 +63,21 @@ void setup() {
   //runOAuthServer should have written to prefs so this will now have the correct data
   lichessToken = prefs.getString("lichess_token");
 
+  Serial.println(lichessToken);
+  accountId = testAccessToken(lichessToken)[lichessToken]["userId"].as<String>();
+  // accountId = getAccountInfo(lichessToken)["id"].as<String>();
+  Serial.println("Account ID: " + accountId);
+
+
   gameId = prefs.getString("game_id");
 
-  accountId = getAccountInfo(lichessToken)["id"].as<String>();
-  Serial.println("Account ID: " + accountId);
+  
 
   //this enables interrupts and to avoid weird behavior I think I should put this at the bottom so the interrupts are only enabled during a game?
   setupMCP();//I could also just run the disable under this function and enable them when I want them enabled
 
   //NEOPIXEL SETUP GOES HERE IF NECESSARY
+  neoPixelSetup();
 }
 
 void loop() {
@@ -104,6 +110,7 @@ void loop() {
   displayMoveOnNeoPixel(lastMove, GREEN);
 
   if(isUsersTurn){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
+    Serial.println("It's Your Turn");
     disableInterruptsUntilButtonPress();
   } else{// your move was the last move so you are just waiting for the oponent to get on with it
     disableAllMCPInterrupts();

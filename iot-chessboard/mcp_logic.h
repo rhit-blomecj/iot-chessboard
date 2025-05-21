@@ -142,21 +142,19 @@ void setupMCP() {
 }
 
 void disableAllMCPInterrupts() {
+  detachInterrupt(digitalPinToInterrupt(MCP_INTERRUPT_PIN));
   for (int i = 0; i < NUM_MCPS; i++) {
-    disableInterrupt(0xFFFF);
+    mcp[i].disableInterrupt16(0xFFFF);
   }
+  Serial.println("in disable ALL MCHInterrupts");
 }
 
 void enableAllMCPInterrupts() {
   for (int i = 0; i < NUM_MCPS; i++) {
-    mcp[i].mirrorInterrupts(true);      // INTA reflects GPA and GPB
-    mcp[i].setInterruptPolarity(2);
-    mcp[i].getInterruptCaptureRegister(); // clears INTCAP and interrupt flags
     mcp[i].enableInterrupt16(0xFFFF, CHANGE);
-    mcp[i].getInterruptCaptureRegister();
   }
-  pinMode(MCP_INTERRUPT_PIN, INPUT_PULLUP); 
   attachInterrupt(digitalPinToInterrupt(MCP_INTERRUPT_PIN), handle_mcp_interrupt, FALLING);
+  Serial.println("in enable ALL MCHInterrupts");
 }
 
 String getChessPosition(int mcp_idx, int pin_on_mcp) {
@@ -246,6 +244,7 @@ void ignoreInterruptCastle() {
 }
 
 String getMoveFromHardware() {
+  Serial.println("in getMoveFromHardware methods");
   String finalMove = "";
   bool move_not_completed = true;
   int highCount = 0;

@@ -72,16 +72,27 @@ void printMoveInfo(String move){
   Serial.printf("Translated to NeoPixel Start: %d\nTranslated to NeoPixel End: %d\n", translateIndexesToNeoPixel(startIndexes), translateIndexesToNeoPixel(endIndexes));
 }
 
+
+void neoPixelSetup(){
+  strip.begin();
+  strip.show();
+}
+
 void setPixelColor(int neo_pos, uint32_t color){
+  Serial.println("setPixelColor Called");
   strip.setPixelColor(neo_pos, color);
+  strip.show();  
 }
 
 void clearPixel(int neo_pos){
   strip.setPixelColor(neo_pos, OFF);
+  strip.show();
 }
 
 void clearAllPixels(){
+  Serial.println("clearAllPixels Called");
   strip.clear();
+  strip.show();
 }
 
 #endif
