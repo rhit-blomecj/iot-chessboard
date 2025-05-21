@@ -24,6 +24,7 @@ enum Color {
 
 enum Color color;
 bool hasKingMovedThisGame;
+bool isUsersTurn;
 
 enum GameState gameState = GAME_OVER;
 
@@ -102,15 +103,11 @@ void loop() {
   //highlight last move in game
   displayMoveOnNeoPixel(lastMove, GREEN);
 
-  //will probably need to have a way to determine if this was your or your oponents move so we know how to handle it
-  //I could move through the moves string switching between white and blacks turns until I know whose turn it is (we should already know our color at this point so we would know whose turn it is then)
-  //^ not super elegant but I know it would work
-  //if(lastMove was Oponents){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
-  //  disable interrupts and wait for user to hit button to reenable then continue game
-  //} else{// your move was the last move so you are just waiting for the oponent to get on with it
-  //  leave interrupts enabled (or enable them if they don't start that way) and continue to the normal game loop waiting for oponent to move
-  //  could potentially disable interrupts until next oponnents move recieved that way no weird behaviour can occur while you shouldn't be moving your pieces anyway (if we disable interrupts here we just need to wait for button press to enable them again in the game loop because we need to wait for your oponnents move to be streamed)
-  //}
+  if(isUsersTurn){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
+    disableInterruptsUntilButtonPress();
+  } else{// your move was the last move so you are just waiting for the oponent to get on with it
+    disableAllMCPInterrupts();
+  }
   
 
   gameState = RUNNING;
@@ -173,6 +170,10 @@ void recieveMoveFromGameStream(){
           String moves_list = nextStreamedEvent["moves"].as<String>();
 
           setHasKingMovedThisGameFromMovesString(moves_list);//after every move update on website if your king has moved this game or not
+
+          //should toggle whose turn it is
+          //if this for some reason causes a bug we can instead calculate it again by calling setIsUsersTurn(String moves);
+          isUsersTurn = !isUsersTurn;
           
           lastMove = getLastMove(moves_list);
           Serial.println("Move: " + lastMove);
@@ -185,12 +186,11 @@ void recieveMoveFromGameStream(){
             gameState = GAME_OVER;
           }
           
-          // if(Opponents Move was last move){
-          //   disable interrupts until button pressed so player can update their board
-          // } else {//was your move that was last streamed
-          //   do nothing just let this carry on so we can wait for oponents move
-          //   could potentially disable interrupts until next oponnents move recieved that way no weird behaviour can occur while you shouldn't be moving your pieces anyway (if we disable interrupts here we don't need to disable interrupts in the top of this if we just need to wait for button press to enable them again)
-          // }
+          if(isUsersTurn){//oponent was last to move so you need to update their side of the board then hit press button
+            enableInterruptsOnButtonPress();
+          } else {//was your move that was last streamed disable the interrupts until it is your turn again then update enemies side of board and press button to reenable interrupts
+            disableAllMCPInterrupts();
+          }
 
           //
           String promoteTo = "";
@@ -218,20 +218,47 @@ JsonDocument reinitializeGameStream(){
   serializeJson(open_game, Serial);
   Serial.println();
 
-  setPlayersColor(open_game);
+  setUsersColor(open_game);
 
-  setHasKingMovedThisGameFromMovesString(open_game["state"]["moves"].as<String>());
+  String moves = open_game["state"]["moves"].as<String>();
+
+  setIsUsersTurn(moves);
+
+  setHasKingMovedThisGameFromMovesString(moves);
   return open_game;
 }
 
-void setPlayersColor(JsonDocument open_game){
+void setUsersColor(JsonDocument open_game){
   if(open_game["white"]["id"].as<String>() == accountId){
     color = LIGHT;
   } else if(open_game["black"]["id"].as<String>() == accountId){
     color = DARK;
   }
 
-  Serial.println("setPlayersColor: " + color);
+  Serial.println("setUsersColor: " + color);
+}
+
+void setIsUsersTurn(String moves){
+  if(color == LIGHT){
+    isUsersTurn = true;
+  } else if (color == DARK){
+    isUsersTurn = false;
+  }
+
+  // if moves string is empty we just set correct values
+  if(moves.length() == 0){
+    return;
+  }
+
+  String tempMoves = moves;
+  int index = 0;
+  //guarunteed to execute once because we know the string is not empty
+  do {//toggle
+    tempMoves = tempMoves.substring(index);//this goes at top and we make index starts as 0 so I'm not trying to substring a negative index
+    isUsersTurn = !isUsersTurn;
+    index = tempMoves.indexOf(" ");
+  } while(index != -1);
+  
 }
 
 void setHasKingMovedThisGameFromMovesString(String moves){
@@ -252,9 +279,7 @@ bool isCastleMove(String move){
   }
 }
 
-void disableInterruptsUntilButtonPress(){
-  disableAllMCPInterrupts();
-  
+void enableInterruptsOnButtonPress(){
   while(true){//wait until button pushed to reenable interrupts
     if (digitalRead(PRG_BTN) == LOW) {
       delay(5); // debounce
@@ -265,6 +290,11 @@ void disableInterruptsUntilButtonPress(){
       break;
     }
   }
+}
+
+void disableInterruptsUntilButtonPress(){
+  disableAllMCPInterrupts();
+  enableInterruptsOnButtonPress();
 }
 
 
