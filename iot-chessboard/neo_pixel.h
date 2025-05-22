@@ -58,7 +58,7 @@ int translateIndexesToNeoPixel(IndexPair pair){
   if(pair.rank_index%2 == 0){
     return (pair.rank_index * FILE_WIDTH + pair.file_index);
   } else{
-    return (pair.rank_index * FILE_WIDTH + (FILE_WIDTH - pair.file_index));
+    return (pair.rank_index * FILE_WIDTH + (FILE_WIDTH - pair.file_index) - 1);
   }
 }
 
