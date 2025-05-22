@@ -75,8 +75,19 @@ void printMoveInfo(String move){
 }
 
 
+void setAllPixelsColors(uint32_t color){
+  for(int i = 1; i <= NUMPIXELS; i++){
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
+}
+
 void neoPixelSetup(){
   strip.begin();
+  setAllPixelsColors(GREEN);
+  strip.show();
+  delay(200);
+  strip.clear();
   strip.show();
 }
 

@@ -4,6 +4,9 @@
   #include <WiFi.h>
 
   extern bool connectWifi(String ssid, String password){
+      Serial.println("SSID in connectWifi: " + ssid);
+      Serial.println("password in connectWifi: " + password);
+
       WiFi.mode(WIFI_STA);
       WiFi.begin(ssid, password);
       Serial.println("");

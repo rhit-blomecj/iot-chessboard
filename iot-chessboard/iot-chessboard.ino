@@ -1,12 +1,12 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
-#include "mcp_logic.h"
+// #include "mcp_logic.h"
+#include "global_preferences.h"
 #include "lichess_api.h"
 #include "bluetooth_wifi_setup.h"
 #include "oled_functions.h"
 #include "wifi_setup.h"
-#include "global_preferences.h"
 #include "neo_pixel.h"
 
 #define PRG_BTN       0       // user button (PRG) pin
@@ -45,23 +45,24 @@ void setup() {
 
   pinMode(PRG_BTN, INPUT);//setup start game button using this may compromise seeding our random number generator but that can be a future me problem
 
+
   // if stored wifi credentials don't work then run Bluetooth network setup
-  String network_ssid = prefs.getString("network_ssid");
-  String network_pw = prefs.getString("network_pw");
+  String network_ssid = prefs.getString("network_ssid", "");
+  String network_pw = prefs.getString("network_pw", "");
   
   if(!connectWifi(network_ssid, network_pw)){
     runBluetoothNetworkSetup();
   }
 
   // if stored lichess credentials don't work then run OAuth setup
-  lichessToken = prefs.getString("lichess_token");
+  lichessToken = prefs.getString("lichess_token", "");
   String testedTokenResponse = testAccessToken(lichessToken)[lichessToken].as<String>();//if this is null then it is invalid idk what it looks like when expired but hopefully the same
   if(testedTokenResponse == "null"){
     runOAuthServer();
   }
 
   //runOAuthServer should have written to prefs so this will now have the correct data
-  lichessToken = prefs.getString("lichess_token");
+  lichessToken = prefs.getString("lichess_token", "");
 
   Serial.println(lichessToken);
   accountId = testAccessToken(lichessToken)[lichessToken]["userId"].as<String>();
@@ -69,12 +70,16 @@ void setup() {
   Serial.println("Account ID: " + accountId);
 
 
-  gameId = prefs.getString("game_id");
+  gameId = prefs.getString("game_id", "");
 
   
 
   //this enables interrupts and to avoid weird behavior I think I should put this at the bottom so the interrupts are only enabled during a game?
-  setupMCP();//I could also just run the disable under this function and enable them when I want them enabled
+  // setupMCP();//I could also just run the disable under this function and enable them when I want them enabled
+  pinMode(4, INPUT);
+  pinMode(5, INPUT);
+  pinMode(6, INPUT);
+  pinMode(7, INPUT);
 
   //NEOPIXEL SETUP GOES HERE IF NECESSARY
   neoPixelSetup();
@@ -107,16 +112,17 @@ void loop() {
   Serial.println("Last Move in Game was: " + lastMove);
 
   //highlight last move in game
-  clearAllPixels();
+  
   if(lastMove.length() != 0){
+    clearAllPixels();
     displayMoveOnNeoPixel(lastMove, GREEN);
   }
 
   if(isUsersTurn){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
     Serial.println("It's Your Turn");
-    disableInterruptsUntilButtonPress();
+    // disableInterruptsUntilButtonPress();
   } else{// your move was the last move so you are just waiting for the oponent to get on with it
-    disableAllMCPInterrupts();
+    // disableAllMCPInterrupts();
     Serial.println("It's Not Your Turn");
   }
   
@@ -127,8 +133,8 @@ void loop() {
 
     
     //if we have a move to send send it
-    String move = getMoveFromHardware();
-    Serial.println("past get Move From Hardware: " + move);
+    String move = getMoveFromSerial();//getMoveFromHardware();
+    // Serial.println("past get Move From Hardware: " + move);
     if (move.length() > 0 ){
       Serial.println("Sending Move: ");
       JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
@@ -138,7 +144,7 @@ void loop() {
         //display Invalid Move
         displayMoveOnNeoPixel(move, RED);
         //disable interrupts to allow fixing your boardstate
-        disableInterruptsUntilButtonPress();
+        // disableInterruptsUntilButtonPress();
 
       } else {//move was valid
         clearAllPixels();
@@ -147,7 +153,8 @@ void loop() {
 
         if(isCastleMove(move)){//if king has not moved this game and it is a move that would be a castle assuming the rook is in the correct spot (we know the king is in the right spot bc it hasn't moved this game)
           //ignore next two interrupts to allow finishing the castle move
-          ignoreInterruptCastle();// We need to get the user instructions that after moving the king for a castle to wait until lichess responds with valid or invalid and if it is valid then you can move the rook
+          Serial.println("User made castle move");
+          // ignoreInterruptCastle();// We need to get the user instructions that after moving the king for a castle to wait until lichess responds with valid or invalid and if it is valid then you can move the rook
         }
       }
     }
@@ -202,9 +209,11 @@ void recieveMoveFromGameStream(){
           }
           
           if(isUsersTurn){//oponent was last to move so you need to update their side of the board then hit press button
-            enableInterruptsOnButtonPress();
+            Serial.println("It is the users turn");
+            // enableInterruptsOnButtonPress();
           } else {//was your move that was last streamed disable the interrupts until it is your turn again then update enemies side of board and press button to reenable interrupts
-            disableAllMCPInterrupts();
+            Serial.println("It is NOT the users turn");
+            // disableAllMCPInterrupts();
           }
 
           //
@@ -300,29 +309,39 @@ bool isCastleMove(String move){
   }
 }
 
-void enableInterruptsOnButtonPress(){
-  while(true){//wait until button pushed to reenable interrupts
-    if (digitalRead(PRG_BTN) == LOW) {
-      delay(5); // debounce
-      //enable interrupts after button press
-      enableAllMCPInterrupts();
-      // wait for USER release
-      while (digitalRead(PRG_BTN) == LOW);
-      break;
-    }
-  }
-}
+// void enableInterruptsOnButtonPress(){
+//   while(true){//wait until button pushed to reenable interrupts
+//     if (digitalRead(PRG_BTN) == LOW) {
+//       delay(5); // debounce
+//       //enable interrupts after button press
+//       enableAllMCPInterrupts();
+//       // wait for USER release
+//       while (digitalRead(PRG_BTN) == LOW);
+//       break;
+//     }
+//   }
+// }
 
-void disableInterruptsUntilButtonPress(){
-  disableAllMCPInterrupts();
-  enableInterruptsOnButtonPress();
-}
+// void disableInterruptsUntilButtonPress(){
+//   disableAllMCPInterrupts();
+//   enableInterruptsOnButtonPress();
+// }
 
 
 void displayMoveOnNeoPixel(String move, uint32_t color){
   String lastMoveStartTile = move.substring(0,2);
   String lastMoveEndTile = move.substring(2,4);
-  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), color);
+  setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), BLUE);
   setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), color);
   Serial.println("Light Up NeoPixels Please");
 }
+
+String getMoveFromSerial(){
+  String move = "";
+  if(Serial.available()){
+    move = Serial.readString();
+  }
+
+  return move;
+}
+
