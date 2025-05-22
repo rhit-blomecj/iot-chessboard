@@ -92,7 +92,7 @@ void loop() {
       gameId = challengeTheAI(lichessToken, body)["id"].as<String>();
 
       //this should update gameId
-      reinitializeGameStream();
+      open_game = reinitializeGameStream();
       
       
       prefs.putString("game_id", gameId);
@@ -107,13 +107,17 @@ void loop() {
   Serial.println("Last Move in Game was: " + lastMove);
 
   //highlight last move in game
-  displayMoveOnNeoPixel(lastMove, GREEN);
+  clearAllPixels();
+  if(lastMove.length() != 0){
+    displayMoveOnNeoPixel(lastMove, GREEN);
+  }
 
   if(isUsersTurn){//this means it is the users turn to move but we need the user to move the pieces so it matches the websites so we have to wait for them to do that
     Serial.println("It's Your Turn");
     disableInterruptsUntilButtonPress();
   } else{// your move was the last move so you are just waiting for the oponent to get on with it
     disableAllMCPInterrupts();
+    Serial.println("It's Not Your Turn");
   }
   
 
@@ -124,6 +128,7 @@ void loop() {
     
     //if we have a move to send send it
     String move = getMoveFromHardware();
+    Serial.println("past get Move From Hardware: " + move);
     if (move.length() > 0 ){
       Serial.println("Sending Move: ");
       JsonDocument makeMoveResponse = makeBoardMove(lichessToken, gameId, move);
@@ -156,8 +161,11 @@ void loop() {
 }
 
 String getLastMove(String moves_list){
+  Serial.println("startgetLastMove");
   int index_of_last_space = moves_list.lastIndexOf(' ') + 1;//if this returns -1 I get 0 so it is start of string
-  return moves_list.substring(index_of_last_space);
+  String lastMove = moves_list.substring(index_of_last_space);
+  Serial.println("getLastMove End: "+ lastMove);
+  return lastMove;
 }
 
 
@@ -236,16 +244,21 @@ JsonDocument reinitializeGameStream(){
 }
 
 void setUsersColor(JsonDocument open_game){
-  if(open_game["white"]["id"].as<String>() == accountId){
-    color = LIGHT;
-  } else if(open_game["black"]["id"].as<String>() == accountId){
-    color = DARK;
-  }
+  String whitePlayerId = open_game["white"]["id"].as<String>();
+  String blackPlayerId = open_game["black"]["id"].as<String>();
 
-  Serial.println("setUsersColor: " + color);
+  Serial.print("setUsersColor: ");
+  if(whitePlayerId == accountId){
+    color = LIGHT;
+    Serial.println("WHITE");
+  } else if(blackPlayerId == accountId){
+    color = DARK;
+    Serial.println("BLACK");
+  }
 }
 
 void setIsUsersTurn(String moves){
+  Serial.println("setIsUsersTurn running");
   if(color == LIGHT){
     isUsersTurn = true;
   } else if (color == DARK){
@@ -262,20 +275,21 @@ void setIsUsersTurn(String moves){
   //guarunteed to execute once because we know the string is not empty
   do {//toggle
     tempMoves = tempMoves.substring(index);//this goes at top and we make index starts as 0 so I'm not trying to substring a negative index
+    Serial.println(tempMoves);
     isUsersTurn = !isUsersTurn;
-    index = tempMoves.indexOf(" ");
-  } while(index != -1);
-  
+    index = tempMoves.indexOf(" ") + 1;
+  } while(index != 0);//indexOf returns -1 plus 1 gives 0
 }
 
 void setHasKingMovedThisGameFromMovesString(String moves){
   if(color == LIGHT){
-    hasKingMovedThisGame = (moves.indexOf("e1") == -1);
+    hasKingMovedThisGame = (moves.indexOf("e1") != -1);
   } else if(color == DARK){
-    hasKingMovedThisGame = (moves.indexOf("e8") == -1);
+    hasKingMovedThisGame = (moves.indexOf("e8") != -1);
   }
 
-  Serial.println("setHasKingMovedThisGameFromMovesString: " + hasKingMovedThisGame);
+  Serial.print("setHasKingMovedThisGameFromMovesString: ");
+  Serial.println(hasKingMovedThisGame);
 }
 
 bool isCastleMove(String move){
@@ -310,4 +324,5 @@ void displayMoveOnNeoPixel(String move, uint32_t color){
   String lastMoveEndTile = move.substring(2,4);
   setPixelColor(translateFileAndRankToNeoPixel(lastMoveStartTile), color);
   setPixelColor(translateFileAndRankToNeoPixel(lastMoveEndTile), color);
+  Serial.println("Light Up NeoPixels Please");
 }

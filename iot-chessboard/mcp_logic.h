@@ -244,71 +244,75 @@ void ignoreInterruptCastle() {
 }
 
 String getMoveFromHardware() {
-  Serial.println("in getMoveFromHardware methods");
+  Serial.print("in getMoveFromHardware methods: ");
+  Serial.println(mcp_interrupt_flag);
   String finalMove = "";
   bool move_not_completed = true;
   int highCount = 0;
   int lowCount = 0;
-  while (move_not_completed) {
-    if (mcp_interrupt_flag) {
+  if (mcp_interrupt_flag) {
+    Serial.println("Found Interrupt====================================================!!!!!!!");
+    while (move_not_completed) {
+      if (mcp_interrupt_flag) {
 
-      Serial.println("----------------------------------");
-      Serial.println("ESP32 Interrupt Triggered!");
-      bool interrupt_found_on_mcp = false;
+        Serial.println("----------------------------------");
+        Serial.println("ESP32 Interrupt Triggered!");
+        bool interrupt_found_on_mcp = false;
 
-      for (int i = 0; i < NUM_MCPS; i++) { 
-        uint16_t intFlags = mcp[i].getInterruptFlagRegister();
+        for (int i = 0; i < NUM_MCPS; i++) { 
+          uint16_t intFlags = mcp[i].getInterruptFlagRegister();
 
-        if (intFlags != 0) {
-          interrupt_found_on_mcp = true;
+          if (intFlags != 0) {
+            interrupt_found_on_mcp = true;
 
-          uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
+            uint16_t capturedValues = mcp[i].getInterruptCaptureRegister();
 
-          for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
-            if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
-              
-              // get chess pos
-              String chess_pos = getChessPosition(i, pin_idx_on_mcp);
-              // int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
-              bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
-              
-              //this is my plan for interacting with the NeoPixel
-              int neo_pos = translateFileAndRankToNeoPixel(chess_pos);
-              
+            for (int pin_idx_on_mcp = 0; pin_idx_on_mcp < 16; pin_idx_on_mcp++) {
+              if ((intFlags >> pin_idx_on_mcp) & 0x01) { 
+                
+                // get chess pos
+                String chess_pos = getChessPosition(i, pin_idx_on_mcp);
+                // int neo_pos = getNeoPixelIndex(i, pin_idx_on_mcp);
+                bool current_pin_state = (capturedValues >> pin_idx_on_mcp) & 0x01;
+                
+                //this is my plan for interacting with the NeoPixel
+                int neo_pos = translateFileAndRankToNeoPixel(chess_pos);
+                
 
-              //eg ec
+                //eg ec
 
-              if (current_pin_state) {
-                if (highCount == 0) { // picking up your own piece
-                  setPixelColor(neo_pos, GREEN);
+                if (current_pin_state) {
+                  if (highCount == 0) { // picking up your own piece
+                    setPixelColor(neo_pos, GREEN);
+                    finalMove += chess_pos;
+                  }
+                  if (highCount > 0 && lowCount == 0) { // picking up enemy piece
+                    // taking enemy piece
+                    // turning on blue
+                    setPixelColor(neo_pos, BLUE);
+                  }
+                  highCount++;
+                } else {
+                  // putting down a piece (finish a move or finish taking)
                   finalMove += chess_pos;
+                  lowCount++;
+                  setPixelColor(neo_pos, GREEN);
+                  move_not_completed = false;
                 }
-                if (highCount > 0 && lowCount == 0) { // picking up enemy piece
-                  // taking enemy piece
-                  // turning on blue
-                  setPixelColor(neo_pos, BLUE);
-                }
-                highCount++;
-              } else {
-                // putting down a piece (finish a move or finish taking)
-                finalMove += chess_pos;
-                lowCount++;
-                setPixelColor(neo_pos, GREEN);
-                move_not_completed = false;
               }
             }
           }
         }
-      }
-      
-      if (!interrupt_found_on_mcp) {
-          for (int m = 0; m < NUM_MCPS; m++) {
-              mcp[m].getInterruptCaptureRegister(); 
-          }
-      }
+        
+        if (!interrupt_found_on_mcp) {
+            for (int m = 0; m < NUM_MCPS; m++) {
+                mcp[m].getInterruptCaptureRegister(); 
+            }
+        }
 
-      mcp_interrupt_flag = false;
-      Serial.println("----------------------------------");
+        mcp_interrupt_flag = false;
+        Serial.println("----------------------------------");
+      }
     }
   }
   return finalMove;

@@ -9,6 +9,8 @@
 #define HEIGHT      8
 #define NUMPIXELS   (WIDTH * HEIGHT)
 
+#define BRIGHTNESS 50 // Set BRIGHTNESS to about 1/5 (max = 255)
+
 // Create NeoPixel object
 Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -81,7 +83,8 @@ void neoPixelSetup(){
 void setPixelColor(int neo_pos, uint32_t color){
   Serial.println("setPixelColor Called");
   strip.setPixelColor(neo_pos, color);
-  strip.show();  
+  strip.show();
+  strip.setBrightness(BRIGHTNESS);
 }
 
 void clearPixel(int neo_pos){
